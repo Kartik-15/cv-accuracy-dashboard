@@ -22,26 +22,32 @@
     --violet:       #8b5cf6;
     --text:         #f1f5f9;
     --muted:        #64748b;
-    --thead:        #192236;
-    --card3:        #060c1a;
-    --sidebar-bg:   #0d1424;
-    --row-sep:      rgba(31,41,55,.5);
-    --sticky-hover: #13203a;
-    --scrollbar:    #374151;
+    --thead:         #192236;
+    --card3:         #060c1a;
+    --sidebar-bg:    #0d1424;
+    --row-sep:       rgba(31,41,55,.5);
+    --sticky-hover:  #13203a;
+    --scrollbar:     #374151;
+    --section-label: #cbd5e1;
+    --code-bg:       #0a1929;
+    --code-text:     #93c5fd;
   }
   body.light {
-    --bg:           #f1f5f9;
-    --card:         #ffffff;
-    --card2:        #f8fafc;
-    --border:       #e2e8f0;
-    --text:         #0f172a;
-    --muted:        #64748b;
-    --thead:        #eef2ff;
-    --card3:        #f1f5f9;
-    --sidebar-bg:   #f8fafc;
-    --row-sep:      rgba(226,232,240,.8);
-    --sticky-hover: #eff6ff;
-    --scrollbar:    #cbd5e1;
+    --bg:            #f1f5f9;
+    --card:          #ffffff;
+    --card2:         #f8fafc;
+    --border:        #94a3b8;
+    --text:          #0f172a;
+    --muted:         #475569;
+    --thead:         #e2e8f0;
+    --card3:         #f1f5f9;
+    --sidebar-bg:    #f8fafc;
+    --row-sep:       rgba(148,163,184,.35);
+    --sticky-hover:  #eff6ff;
+    --scrollbar:     #94a3b8;
+    --section-label: #334155;
+    --code-bg:       #e2e8f0;
+    --code-text:     #1e40af;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
@@ -60,7 +66,7 @@
   .btn { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:9px 18px; font-size:.85rem; font-weight:600; cursor:pointer; transition:all .18s; }
   .btn-primary { background:var(--blue); color:#fff; }
   .btn-primary:hover { background:#2563eb; transform:translateY(-1px); }
-  .btn-primary:disabled { background:#374151; color:#6b7280; cursor:not-allowed; transform:none; }
+  .btn-primary:disabled { background:var(--border); color:var(--muted); cursor:not-allowed; transform:none; }
   .btn-ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
   .btn-ghost:hover { border-color:var(--blue); color:var(--blue); }
   .btn-sm { padding:5px 12px; font-size:.78rem; }
@@ -202,7 +208,7 @@
       </div>
       <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Detection Data</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Bounding box level AI predictions vs Ground Truth</div>
-      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-det" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
         <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
           <i class="fas fa-check-circle"></i>
@@ -220,7 +226,7 @@
       </div>
       <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Image Quality</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Maps session IDs to image quality tiers</div>
-      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-iq" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
         <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
           <i class="fas fa-check-circle"></i>
@@ -238,7 +244,7 @@
       </div>
       <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Masterdata</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Product catalog with brand, variant &amp; size attributes</div>
-      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-md" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
         <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
           <i class="fas fa-check-circle"></i>
@@ -254,19 +260,19 @@
     <div style="flex:1;">
       <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Model ID / Version</label>
       <input type="text" id="inp-modelId" placeholder="e.g. v1.2, YOLOv8-epoch-50, Model-3…" style="width:100%;">
-      <div style="font-size:.7rem;color:#374151;margin-top:4px;">Tag this run to track accuracy trends over time</div>
+      <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Tag this run to track accuracy trends over time</div>
     </div>
     <div style="flex:0 0 auto;">
       <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Run Date</label>
       <input type="date" id="inp-runDate" style="width:190px;">
-      <div style="font-size:.7rem;color:#374151;margin-top:4px;">Defaults to today</div>
+      <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Defaults to today</div>
     </div>
   </div>
 
   <button id="processBtn" class="btn btn-primary" style="padding:12px 36px;font-size:.95rem;" disabled onclick="openMappingModal()">
     <i class="fas fa-cogs"></i> Process Data
   </button>
-  <p style="font-size:.73rem;color:#374151;margin-top:12px;">No data leaves your device. All computation runs in-browser.</p>
+  <p style="font-size:.73rem;color:var(--muted);margin-top:12px;">No data leaves your device. All computation runs in-browser.</p>
 </div>
 
 
@@ -304,7 +310,7 @@
 ══════════════════════════════════════════ -->
 <div id="procOverlay" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(10,15,30,.96);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div class="spinner"></div>
-  <div id="procMsg" style="font-size:1rem;color:#cbd5e1;font-weight:500;">Processing...</div>
+  <div id="procMsg" style="font-size:1rem;color:var(--section-label);font-weight:500;">Processing...</div>
   <div class="prog-wrap"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
 </div>
 
@@ -364,13 +370,13 @@
       <div id="tcontent-overview">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div class="card">
-            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-layer-group" style="color:var(--blue);"></i>Accuracy by Image Quality
             </div>
             <div style="height:210px;"><canvas id="chart1"></canvas></div>
           </div>
           <div class="card">
-            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-tags" style="color:var(--violet);"></i>Brand vs Variant vs SKU Accuracy (Top 10)
             </div>
             <div style="height:210px;"><canvas id="chart2"></canvas></div>
@@ -381,7 +387,7 @@
       <!-- Tab: Brand Analysis -->
       <div id="tcontent-brand" style="display:none;">
         <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
             <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy (Top 15 by Volume)
           </div>
           <div style="height:320px;"><canvas id="chart3"></canvas></div>
@@ -417,7 +423,7 @@
       <!-- Tab: Variant Analysis -->
       <div id="tcontent-variant" style="display:none;">
         <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
             <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy (Top 15 by Volume)
           </div>
           <div style="height:320px;"><canvas id="chart4"></canvas></div>
@@ -488,7 +494,7 @@
 
         <!-- Overall KPI trend -->
         <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
             <i class="fas fa-chart-line" style="color:var(--blue);"></i>Overall KPI Trends (Accuracy / Precision / Recall / F1)
           </div>
           <div style="height:260px;"><canvas id="chart5"></canvas></div>
@@ -497,7 +503,7 @@
         <!-- Brand accuracy trend -->
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
-            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);white-space:nowrap;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-tag" style="color:var(--green);"></i>Brand Accuracy Trends
             </div>
             <div id="brandTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
@@ -508,7 +514,7 @@
         <!-- Variant accuracy trend -->
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
-            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);white-space:nowrap;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy Trends
             </div>
             <div id="variantTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
@@ -519,7 +525,7 @@
         <!-- SKU accuracy trend -->
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
-            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);white-space:nowrap;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-microscope" style="color:var(--amber);"></i>SKU Accuracy Trends (Top Error SKUs)
             </div>
             <div id="skuTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
@@ -726,7 +732,7 @@ function bestMatch(headers, cands) {
 function samples(rows, col) {
   if (!col || !rows.length) return '';
   const vals = rows.slice(0,8).map(function(r) { return r[col]; }).filter(function(v) { return v !== undefined && v !== null && v !== ''; }).slice(0,3);
-  return vals.length ? vals.map(function(v) { return '<code style="background:#0a1929;color:#93c5fd;padding:1px 5px;border-radius:4px;font-size:.72rem;">' + String(v).substring(0,30) + '</code>'; }).join(' ') : '';
+  return vals.length ? vals.map(function(v) { return '<code style="background:var(--code-bg);color:var(--code-text);padding:1px 5px;border-radius:4px;font-size:.72rem;">' + String(v).substring(0,30) + '</code>'; }).join(' ') : '';
 }
 
 function buildTabHTML(key, rows, headers) {
@@ -748,7 +754,7 @@ function buildTabHTML(key, rows, headers) {
     const smp = samples(rows, detected);
     html += '<div style="margin-bottom:14px;padding:14px;background:var(--card2);border-radius:8px;">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">' +
-      '<label style="font-size:.83rem;font-weight:600;color:#f1f5f9;">' +
+      '<label style="font-size:.83rem;font-weight:600;color:var(--text);">' +
       def.label + (def.req ? ' <span style="color:#f87171;">*</span>' : ' <span style="font-size:.72rem;color:var(--muted);">(opt)</span>') +
       '</label>' +
       '<div style="font-size:.72rem;max-width:220px;text-align:right;">' + smp + '</div>' +
@@ -1622,7 +1628,7 @@ function buildDrillContent(errors, total, colspan) {
       : '<span style="font-size:.7rem;color:var(--muted);font-style:italic;">no image URL</span>';
 
     return '<tr style="border-bottom:1px solid rgba(31,41,55,.5);">' +
-      '<td style="text-align:left;padding:5px 14px 5px 0;font-size:.79rem;color:#f1f5f9;white-space:nowrap;font-weight:500;">' + brandName + '</td>' +
+      '<td style="text-align:left;padding:5px 14px 5px 0;font-size:.79rem;color:var(--text);white-space:nowrap;font-weight:500;">' + brandName + '</td>' +
       '<td style="text-align:right;padding:5px 12px;font-size:.79rem;color:var(--red);font-weight:600;">' + cnt.toLocaleString() + '</td>' +
       '<td style="text-align:right;padding:5px 14px;font-size:.79rem;color:var(--muted);">' + (cnt/total*100).toFixed(1) + '%</td>' +
       '<td style="padding:5px 0 5px 4px;">' + chips + '</td>' +
@@ -1668,7 +1674,7 @@ function renderBrandAccuracy() {
     const hasErrors  = row.errorCount > 0;
     const isSelf     = row.competition === 'self';
     const compLabel  = isSelf ? 'CCI' : (row.competition === 'competitor' ? 'Comp.' : row.competition || '—');
-    const compStyle  = isSelf ? 'color:#10b981;' : 'color:#94a3b8;';
+    const compStyle  = isSelf ? 'color:#10b981;' : 'color:var(--muted);';
 
     const expandBtn = hasErrors
       ? '<button onclick="toggleBrandDrill(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded?'rgba(245,158,11,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded?'var(--amber)':'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;"><i class="fas fa-chevron-' + (isExpanded?'down':'right') + '"></i></button>'
@@ -1676,7 +1682,7 @@ function renderBrandAccuracy() {
 
     const mainRow = '<tr' + (hasErrors ? ' onclick="toggleBrandDrill(' + i + ')" style="cursor:pointer;"' : '') + '>' +
       '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
-      '<td class="left" style="font-weight:600;color:#f1f5f9;max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="' + row.brand + '">' + row.brand + '</td>' +
+      '<td class="left" style="font-weight:600;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="' + row.brand + '">' + row.brand + '</td>' +
       '<td class="left"><span style="' + compStyle + 'font-size:.72rem;font-weight:600;">' + compLabel + '</span></td>' +
       '<td style="color:var(--green);">' + row.correct.toLocaleString() + '</td>' +
       '<td style="color:' + (hasErrors?'var(--red)':'var(--muted)') + ';font-weight:' + (hasErrors?'600':'400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
@@ -1752,7 +1758,7 @@ function renderVariantAccuracy() {
 
     const mainRow = '<tr' + (hasErrors ? ' onclick="toggleVariantDrill(' + i + ')" style="cursor:pointer;"' : '') + '>' +
       '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
-      '<td class="left" style="font-weight:600;color:#f1f5f9;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + row.label + '">' + row.label + '</td>' +
+      '<td class="left" style="font-weight:600;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + row.label + '">' + row.label + '</td>' +
       '<td style="color:var(--green);">' + row.correct.toLocaleString() + '</td>' +
       '<td style="color:' + (hasErrors?'var(--red)':'var(--muted)') + ';font-weight:' + (hasErrors?'600':'400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
       '<td>' + row.total.toLocaleString() + '</td>' +
@@ -1829,7 +1835,7 @@ function renderSkuAccuracy() {
 
     const mainRow = '<tr' + (hasErrors ? ' onclick="toggleSkuDrillIdx(' + i + ')" style="cursor:pointer;"' : '') + '>' +
       '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
-      '<td class="left" style="font-weight:500;color:#f1f5f9;">' + s.sku + '</td>' +
+      '<td class="left" style="font-weight:500;color:var(--text);">' + s.sku + '</td>' +
       '<td class="left" style="color:var(--muted);font-size:.78rem;">' + (s.brand || '—') + '</td>' +
       '<td style="color:var(--green);">' + s.correct.toLocaleString() + '</td>' +
       '<td style="color:' + errCol + ';font-weight:' + (hasErrors?'600':'400') + ';">' + s.errorCount.toLocaleString() + '</td>' +
@@ -1949,15 +1955,15 @@ function renderBrandDemo() {
         '<div style="display:flex;align-items:center;gap:7px;">' +
         (viewerUrl
           ? '<a href="' + viewerUrl + '" target="_blank" title="Open in ShelfWatch viewer" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(59,130,246,.18);border-radius:7px;color:var(--blue);flex-shrink:0;text-decoration:none;transition:background .15s;" onmouseover="this.style.background=\'rgba(59,130,246,.35)\'" onmouseout="this.style.background=\'rgba(59,130,246,.18)\'"><i class="fas fa-image" style="font-size:.7rem;"></i></a>'
-          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:#374151;"></i></span>') +
-        '<code style="font-size:.75rem;color:#94a3b8;" title="' + row.sid + '">' + sid8 + '</code>' +
+          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:var(--muted);"></i></span>') +
+        '<code style="font-size:.75rem;color:var(--muted);" title="' + row.sid + '">' + sid8 + '</code>' +
         '</div></td>' +
         '<td class="left s2" style="min-width:110px;"><span style="background:' + qc + '22;color:' + qc + ';border-radius:20px;padding:2px 8px;font-size:.73rem;font-weight:600;">' + row.quality + '</span></td>' +
         '<td style="color:var(--green);font-weight:600;">' + row.selfFacings + '</td>' +
         '<td style="color:var(--amber);">' + row.selfMisclass + '</td>' +
         '<td style="color:var(--red);">' + row.nonNARTD + '</td>' +
         '<td style="color:var(--muted);">' + row.others + '</td>' +
-        brands.map(function(b) { return '<td style="color:#cbd5e1;">' + (row.bc[b]||0) + '</td>'; }).join('') +
+        brands.map(function(b) { return '<td style="color:var(--section-label);">' + (row.bc[b]||0) + '</td>'; }).join('') +
         '<td style="font-weight:700;color:var(--text);">' + row.total + '</td>' +
         '</tr>';
     }).join('');
@@ -2025,12 +2031,12 @@ function renderSizeDemo() {
         '<div style="display:flex;align-items:center;gap:7px;">' +
         (viewerUrl
           ? '<a href="' + viewerUrl + '" target="_blank" title="Open in ShelfWatch viewer" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(59,130,246,.18);border-radius:7px;color:var(--blue);flex-shrink:0;text-decoration:none;transition:background .15s;" onmouseover="this.style.background=\'rgba(59,130,246,.35)\'" onmouseout="this.style.background=\'rgba(59,130,246,.18)\'"><i class="fas fa-image" style="font-size:.7rem;"></i></a>'
-          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:#374151;"></i></span>') +
-        '<code style="font-size:.75rem;color:#94a3b8;" title="' + row.sid + '">' + sid8 + '</code>' +
+          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:var(--muted);"></i></span>') +
+        '<code style="font-size:.75rem;color:var(--muted);" title="' + row.sid + '">' + sid8 + '</code>' +
         '</div></td>' +
         '<td class="left s2" style="min-width:110px;"><span style="background:' + qc + '22;color:' + qc + ';border-radius:20px;padding:2px 8px;font-size:.73rem;font-weight:600;">' + row.quality + '</span></td>' +
         '<td style="color:var(--amber);font-weight:600;">' + row.total + '</td>' +
-        freshBrands.map(function(b) { return '<td style="color:#cbd5e1;">' + (row.bc[b]||0) + '</td>'; }).join('') +
+        freshBrands.map(function(b) { return '<td style="color:var(--section-label);">' + (row.bc[b]||0) + '</td>'; }).join('') +
         '</tr>';
     }).join('');
   }
@@ -2227,7 +2233,7 @@ function renderHistoryTable(history) {
     var col = h.kpis ? kpiColor(h.kpis.acc) : 'var(--muted)';
     var isCur = APP.d.modelId && h.modelId === APP.d.modelId && h.date === APP.d.date;
     return '<tr style="' + (isCur ? 'background:rgba(59,130,246,.07);' : '') + '">' +
-      '<td class="left" style="font-weight:600;color:#f1f5f9;">' + h.modelId +
+      '<td class="left" style="font-weight:600;color:var(--text);">' + h.modelId +
         (isCur ? ' <span style="font-size:.63rem;background:rgba(59,130,246,.2);color:var(--blue);border-radius:10px;padding:1px 7px;margin-left:5px;">current</span>' : '') + '</td>' +
       '<td class="left" style="color:var(--muted);">' + h.date + '</td>' +
       '<td style="color:' + col + ';font-weight:600;">' + acc + '</td>' +

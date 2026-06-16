@@ -521,9 +521,11 @@ const APP = {
     qualities: [],
     variants: [],
     measures: [],
-    subcats: []
+    subcats: [],
+    attrKeys: [],
+    attrValues: {}
   },
-  f: { qualities:[], brands:[], variants:[], measures:[] },
+  f: { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
   pg: {
     bd: { page:1, size:25, q:'', rows:[] },
     sd: { page:1, size:25, q:'', rows:[] }
@@ -839,17 +841,24 @@ function buildMasterdataMap(rows, cols) {
     if (aname) byClass[cname][aname] = aval;
   }
 
+  const SKIP_ATTR = new Set(['display name','display_name','display name ','competition']);
   const map = {};
   for (const [, attrs] of Object.entries(byClass)) {
     const dn = cl(attrs['Display Name'] || attrs['display_name'] || attrs['display name'] || '');
     if (!dn) continue;
     const key = dn.toLowerCase();
+    // Build raw attrs map (all attributes except internal ones)
+    const rawAttrs = {};
+    for (const [k, v] of Object.entries(attrs)) {
+      if (!SKIP_ATTR.has(k.toLowerCase()) && v && v !== '') rawAttrs[k] = v;
+    }
     map[key] = {
       brand:    cl(attrs['Brand'] || ''),
       variant:  cl(attrs['Pack type'] || attrs['Variant'] || ''),
       measure:  parseInt(cl(attrs['measure'] || '0')) || 0,
       subcat:   cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
-      competition: cl(attrs.competition || '')
+      competition: cl(attrs.competition || ''),
+      attrs: rawAttrs
     };
   }
   return map;
@@ -889,6 +898,7 @@ function enrichRows(detRows, qMap, mMap, cols) {
       gt_variant: gta.variant,
       gt_measure: gta.measure,
       gt_comp:    gta.competition || (comp === 'self' ? '' : ''),
+      gt_attrs:   gta.attrs || {},
       pred_brand:   pra.brand,
       pred_variant: pra.variant,
       pred_measure: pra.measure
@@ -925,6 +935,27 @@ async function processData() {
   APP.d.variants  = unique(Object.values(APP.d.mMap).map(function(v) { return v.variant; }).filter(Boolean)).sort();
   APP.d.measures  = unique(Object.values(APP.d.mMap).map(function(v) { return v.measure; }).filter(function(m) { return m > 0; })).sort(function(a,b) { return a-b; });
   APP.d.subcats   = unique(Object.values(APP.d.mMap).map(function(v) { return v.subcat; }).filter(Boolean)).sort();
+
+  // Build dynamic attribute index from all masterdata attrs
+  var attrKeySet = new Set();
+  var attrValMap = {};
+  Object.values(APP.d.mMap).forEach(function(entry) {
+    Object.entries(entry.attrs || {}).forEach(function(kv) {
+      var k = kv[0], v = kv[1];
+      attrKeySet.add(k);
+      if (!attrValMap[k]) attrValMap[k] = new Set();
+      if (v) attrValMap[k].add(v);
+    });
+  });
+  APP.d.attrKeys = Array.from(attrKeySet).sort();
+  APP.d.attrValues = {};
+  APP.d.attrKeys.forEach(function(k) {
+    APP.d.attrValues[k] = Array.from(attrValMap[k]).sort(function(a,b) {
+      var na = parseFloat(a), nb = parseFloat(b);
+      return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+    });
+  });
+  APP.f.attrs = {};
 
   const matched = APP.d.rows.filter(function(r) { return r.quality !== 'Unknown'; }).length;
   document.getElementById('qualWarn').style.display = (matched === 0 && APP.d.rows.length > 0) ? 'flex' : 'none';
@@ -975,31 +1006,56 @@ const unique = function(arr) { return [...new Set(arr.filter(function(v) { retur
 // ═══════════════════════════════════════════════════════════
 
 // ── Filter section visibility (persisted in localStorage) ──
-const FILTER_SECTIONS_KEY = 'cci_filter_sections_v1';
-const FILTER_SECTION_DEFS = [
-  { key:'qualities', icon:'fa-star',   color:'var(--blue)',   label:'Image Quality',       searchable:false },
-  { key:'brands',    icon:'fa-tag',    color:'var(--green)',  label:'GT Brand',            searchable:true  },
-  { key:'variants',  icon:'fa-box',    color:'var(--violet)', label:'Variant / Pack Type', searchable:false },
-  { key:'measures',  icon:'fa-ruler',  color:'var(--amber)',  label:'SKU Size (ml)',       searchable:true  }
-];
+const FILTER_SECTIONS_KEY = 'cci_filter_sections_v2';
+
+// Style lookup for known attribute names; fallback for unknowns
+const ATTR_STYLE_MAP = {
+  'Brand':        { icon:'fa-tag',         color:'var(--green)'  },
+  'Pack type':    { icon:'fa-box',         color:'var(--violet)' },
+  'Variant':      { icon:'fa-layer-group', color:'#06b6d4'       },
+  'Sub category': { icon:'fa-folder',      color:'var(--amber)'  },
+  'Sub Category': { icon:'fa-folder',      color:'var(--amber)'  },
+  'measure':      { icon:'fa-ruler',       color:'#f97316'       },
+  'Measure':      { icon:'fa-ruler',       color:'#f97316'       }
+};
+const ATTR_DEFAULT_STYLE = { icon:'fa-filter', color:'#94a3b8' };
+
+function getAttrStyle(attrName) {
+  return ATTR_STYLE_MAP[attrName] || ATTR_DEFAULT_STYLE;
+}
+
+// Build filter section defs dynamically from loaded masterdata attributes
+function buildFilterSectionDefs() {
+  var defs = [
+    { key:'qualities', icon:'fa-star', color:'var(--blue)', label:'Image Quality', searchable:false, items:APP.d.qualities }
+  ];
+  APP.d.attrKeys.forEach(function(attrName) {
+    var style = getAttrStyle(attrName);
+    var items = APP.d.attrValues[attrName] || [];
+    defs.push({ key:'attr:'+attrName, icon:style.icon, color:style.color, label:attrName, searchable:items.length > 8, items:items, attrName:attrName });
+  });
+  return defs;
+}
 
 function loadFilterSections() {
   try {
-    const saved = JSON.parse(localStorage.getItem(FILTER_SECTIONS_KEY));
+    var saved = JSON.parse(localStorage.getItem(FILTER_SECTIONS_KEY));
     if (Array.isArray(saved)) return new Set(saved);
   } catch(e) {}
-  return new Set(['qualities','brands','measures']);
+  return new Set(['qualities', 'attr:Brand']);
 }
 APP._visibleFilterSections = loadFilterSections();
 
 function saveFilterSections() {
-  localStorage.setItem(FILTER_SECTIONS_KEY, JSON.stringify([...APP._visibleFilterSections]));
+  localStorage.setItem(FILTER_SECTIONS_KEY, JSON.stringify(Array.from(APP._visibleFilterSections)));
 }
 
 function toggleFilterSection(key) {
   if (APP._visibleFilterSections.has(key)) {
     APP._visibleFilterSections.delete(key);
-    APP.f[key] = [];
+    // Clear active selections for this section
+    if (key === 'qualities') APP.f.qualities = [];
+    else if (key.startsWith('attr:')) { var a = key.slice(5); if (APP.f.attrs[a]) APP.f.attrs[a] = []; }
   } else {
     APP._visibleFilterSections.add(key);
   }
@@ -1008,21 +1064,25 @@ function toggleFilterSection(key) {
 }
 
 function filteredRows() {
-  const f = APP.f;
+  var f = APP.f;
+  var attrEntries = Object.entries(f.attrs);
   return APP.d.rows.filter(function(r) {
     if (f.qualities.length && !f.qualities.includes(r.quality)) return false;
-    if (f.brands.length   && !f.brands.includes(r.gt_brand))   return false;
-    if (f.variants.length && !f.variants.includes(r.gt_variant)) return false;
-    if (f.measures.length && !f.measures.includes(r.gt_measure)) return false;
+    for (var i = 0; i < attrEntries.length; i++) {
+      var attrName = attrEntries[i][0], vals = attrEntries[i][1];
+      if (vals.length && !(r.gt_attrs && vals.includes(r.gt_attrs[attrName]))) return false;
+    }
     return true;
   });
 }
 
 function renderFilters() {
-  const picker = document.getElementById('filterSectionPicker');
-  picker.innerHTML = FILTER_SECTION_DEFS.map(function(def) {
-    const on = APP._visibleFilterSections.has(def.key);
-    return '<button onclick="toggleFilterSection(\'' + def.key + '\')" style="' +
+  var defs = buildFilterSectionDefs();
+
+  var picker = document.getElementById('filterSectionPicker');
+  picker.innerHTML = defs.map(function(def) {
+    var on = APP._visibleFilterSections.has(def.key);
+    return '<button onclick="toggleFilterSection(\'' + def.key.replace(/'/g,"\\'") + '\')" style="' +
       'display:inline-flex;align-items:center;gap:4px;font-size:.69rem;font-weight:600;' +
       'padding:3px 8px;border-radius:20px;cursor:pointer;border:1px solid;transition:all .15s;' +
       (on
@@ -1030,23 +1090,28 @@ function renderFilters() {
         : 'background:transparent;color:var(--muted);border-color:var(--border);') +
       '" title="' + (on ? 'Hide' : 'Show') + ' ' + def.label + ' filter">' +
       '<i class="fas ' + def.icon + '" style="font-size:.6rem;"></i>' +
-      def.label.split(' ')[0] +
+      def.label +
       '</button>';
   }).join('');
 
-  const box = document.getElementById('filtersBox');
-  box.innerHTML = FILTER_SECTION_DEFS
+  var box = document.getElementById('filtersBox');
+  box.innerHTML = defs
     .filter(function(def) { return APP._visibleFilterSections.has(def.key); })
-    .map(function(def) { return filterSection(def.key, def.icon, def.color, def.label, APP.d[def.key] || [], def.searchable); })
+    .map(function(def) { return filterSection(def.key, def.icon, def.color, def.label, def.items, def.searchable); })
     .join('');
 }
 
 function filterSection(key, icon, color, label, items, searchable) {
-  const chkboxes = items.map(function(item) {
-    const checked = APP.f[key].includes(item) ? 'checked' : '';
-    const val = typeof item === 'number' ? item : ("'" + String(item).replace(/'/g, "\\'") + "'");
+  // Get active selections for this key
+  var activeArr = key === 'qualities' ? APP.f.qualities : (key.startsWith('attr:') ? (APP.f.attrs[key.slice(5)] || []) : []);
+  var safeKey = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var listId = 'fs-list-' + key.replace(/[^a-zA-Z0-9]/g,'_');
+
+  var chkboxes = items.map(function(item) {
+    var checked = activeArr.includes(String(item)) ? 'checked' : '';
+    var val = "'" + String(item).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'";
     return '<label class="flabel">' +
-      '<input type="checkbox" value="' + item + '" ' + checked + ' onchange="toggleFilter(\'' + key + '\',' + val + ',this.checked)">' +
+      '<input type="checkbox" value="' + item + '" ' + checked + ' onchange="toggleFilter(\'' + safeKey + '\',' + val + ',this.checked)">' +
       '<span>' + item + '</span></label>';
   }).join('');
 
@@ -1055,29 +1120,39 @@ function filterSection(key, icon, color, label, items, searchable) {
     '<span><i class="fas ' + icon + '" style="color:' + color + ';margin-right:7px;"></i>' + label + '</span>' +
     '<i class="fas fa-chevron-down" style="font-size:.65rem;"></i>' +
     '</div>' +
-    (searchable ? '<input type="search" placeholder="Search…" style="width:100%;margin-bottom:8px;padding:5px 9px;font-size:.76rem;" oninput="filterSearch(this,\'fs-list-' + key + '\')">' : '') +
-    '<div class="filter-list ' + (searchable ? 'ms' : '') + '" id="fs-list-' + key + '">' + chkboxes + '</div>' +
+    (searchable ? '<input type="search" placeholder="Search…" style="width:100%;margin-bottom:8px;padding:5px 9px;font-size:.76rem;" oninput="filterSearch(this,\'' + listId + '\')">' : '') +
+    '<div class="filter-list ' + (searchable ? 'ms' : '') + '" id="' + listId + '">' + chkboxes + '</div>' +
     '</div>';
 }
 
 function filterSearch(inp, listId) {
-  const q = inp.value.toLowerCase();
+  var q = inp.value.toLowerCase();
   document.querySelectorAll('#' + listId + ' .flabel').forEach(function(el) {
     el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
 
 function toggleFilter(key, value, checked) {
-  const arr = APP.f[key];
+  var arr;
+  if (key === 'qualities') {
+    arr = APP.f.qualities;
+  } else if (key.startsWith('attr:')) {
+    var attrName = key.slice(5);
+    if (!APP.f.attrs[attrName]) APP.f.attrs[attrName] = [];
+    arr = APP.f.attrs[attrName];
+  } else {
+    return;
+  }
+  value = String(value);
   if (checked) { if (!arr.includes(value)) arr.push(value); }
-  else { const i = arr.indexOf(value); if (i !== -1) arr.splice(i, 1); }
+  else { var idx = arr.indexOf(value); if (idx !== -1) arr.splice(idx, 1); }
   APP.pg.bd.page = 1;
   APP.pg.sd.page = 1;
   renderAll();
 }
 
 function resetFilters() {
-  APP.f = { qualities:[], brands:[], variants:[], measures:[] };
+  APP.f = { qualities:[], brands:[], variants:[], measures:[], attrs:{} };
   APP.pg.bd.page = 1;
   APP.pg.sd.page = 1;
   APP._skuExpanded = new Set();
@@ -1087,7 +1162,7 @@ function resetFilters() {
 }
 
 function resetFilterSections() {
-  APP._visibleFilterSections = new Set(['qualities','brands','measures']);
+  APP._visibleFilterSections = new Set(['qualities', 'attr:Brand']);
   saveFilterSections();
   renderAll();
 }

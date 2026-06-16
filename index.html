@@ -1538,23 +1538,36 @@ function renderBrandChart(rows) {
   });
 }
 
-function renderBrandSubChart(canvasId, rows) {
+// Build brand stats map from rows
+function _brandStats(rows) {
   var bs = {};
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
-    var b = r.gt_brand || 'Unknown';
+    var b = r.gt_brand;
+    if (!b || _isBlankVal(b)) continue;
     if (!bs[b]) bs[b] = { c:0, t:0 };
     bs[b].t++;
     if (r.pred_brand === b) bs[b].c++;
   }
-  var top15 = Object.entries(bs)
-    .filter(function(e) { return e[0] && e[0] !== 'Unknown'; })
-    .sort(function(a,b) { return b[1].t - a[1].t; })
-    .slice(0, 15);
-  if (!top15.length) return null;
-  var labels = top15.map(function(e) { return e[0]; });
-  var data   = top15.map(function(e) { return e[1].t > 0 ? +(e[1].c/e[1].t*100).toFixed(1) : 0; });
-  var counts = top15.map(function(e) { return e[1].t; });
+  return bs;
+}
+
+// fixedLabels: shared brand order across all sub-charts in a group
+function renderBrandSubChart(canvasId, rows, fixedLabels) {
+  var bs = _brandStats(rows);
+  var labels, data, counts;
+  if (fixedLabels && fixedLabels.length) {
+    labels = fixedLabels;
+    data   = labels.map(function(b) { return bs[b] && bs[b].t > 0 ? +(bs[b].c/bs[b].t*100).toFixed(1) : 0; });
+    counts = labels.map(function(b) { return bs[b] ? bs[b].t : 0; });
+  } else {
+    var top15 = Object.entries(bs).sort(function(a,b) { return b[1].t - a[1].t; }).slice(0,15);
+    if (!top15.length) return null;
+    labels = top15.map(function(e) { return e[0]; });
+    data   = top15.map(function(e) { return e[1].t > 0 ? +(e[1].c/e[1].t*100).toFixed(1) : 0; });
+    counts = top15.map(function(e) { return e[1].t; });
+  }
+  if (!labels.length) return null;
   var colors = data.map(function(v) { return v>=90?'#10b981':v>=75?'#f59e0b':'#ef4444'; });
   var canvas = document.getElementById(canvasId);
   if (!canvas) return null;
@@ -1613,7 +1626,22 @@ function renderBrandBreakdownCharts() {
         items.push({ val:val, rows:subRows, id:safeId });
       }
     });
-    if (items.length > 0) groups.push({ def:def, items:items });
+    if (items.length > 0) {
+      // Compute global brand order: top 15 by total volume across all sub-charts in this group
+      var combined = {};
+      items.forEach(function(item) {
+        var bs = _brandStats(item.rows);
+        Object.entries(bs).forEach(function(kv) {
+          if (!combined[kv[0]]) combined[kv[0]] = 0;
+          combined[kv[0]] += kv[1].t;
+        });
+      });
+      var globalOrder = Object.entries(combined)
+        .sort(function(a,b) { return b[1]-a[1]; })
+        .slice(0,15)
+        .map(function(e) { return e[0]; });
+      groups.push({ def:def, items:items, globalOrder:globalOrder });
+    }
   });
 
   if (!groups.length) { container.innerHTML = ''; return; }
@@ -1628,7 +1656,7 @@ function renderBrandBreakdownCharts() {
       'Brand Accuracy by ' + g.def.label + '</div>' +
       '<div style="display:grid;grid-template-columns:' + colW + ';gap:12px;">' +
       g.items.map(function(item) {
-        var barH = Math.min(Math.max(item.rows.length > 0 ? 15*22+40 : 140, 140), 380);
+        var barH = Math.min(Math.max(g.globalOrder.length * 22 + 40, 140), 380);
         return '<div class="card" style="padding:14px;">' +
           '<div style="font-size:.74rem;font-weight:600;color:var(--muted);margin-bottom:8px;">' + item.val + '</div>' +
           '<div style="position:relative;height:' + barH + 'px;"><canvas id="' + item.id + '"></canvas></div>' +
@@ -1641,7 +1669,7 @@ function renderBrandBreakdownCharts() {
 
   groups.forEach(function(g) {
     g.items.forEach(function(item) {
-      APP._breakdownCharts[item.id] = renderBrandSubChart(item.id, item.rows);
+      APP._breakdownCharts[item.id] = renderBrandSubChart(item.id, item.rows, g.globalOrder);
     });
   });
 }

@@ -1072,13 +1072,18 @@ function getAttrStyle(attrName) {
 }
 
 // Build filter section defs dynamically from loaded masterdata attributes
+var _BLANK_VALS = new Set(['unknown','n/a','#n/a','-','null','none','na','']);
+function _isBlankVal(v) { return !v || _BLANK_VALS.has(String(v).trim().toLowerCase()); }
+
 function buildFilterSectionDefs() {
   var defs = [
-    { key:'qualities', icon:'fa-star', color:'var(--blue)', label:'Image Quality', searchable:false, items:APP.d.qualities }
+    { key:'qualities', icon:'fa-star', color:'var(--blue)', label:'Image Quality', searchable:false,
+      items: APP.d.qualities.filter(function(q) { return !_isBlankVal(q); }) }
   ];
   APP.d.attrKeys.forEach(function(attrName) {
     var style = getAttrStyle(attrName);
-    var items = APP.d.attrValues[attrName] || [];
+    var items = (APP.d.attrValues[attrName] || []).filter(function(v) { return !_isBlankVal(v); });
+    if (!items.length) return;
     defs.push({ key:'attr:'+attrName, icon:style.icon, color:style.color, label:attrName, searchable:items.length > 8, items:items, attrName:attrName });
   });
   return defs;
@@ -1588,19 +1593,20 @@ function renderBrandBreakdownCharts() {
     return false;
   });
 
-  // Build groups: use rows filtered by everything EXCEPT this attribute
-  // so all values of the dimension are visible for comparison
+  // Build groups: one chart per CHECKED value only
   var groups = [];
   activeDefs.forEach(function(def) {
-    var baseRows = filteredRowsExcept(def.key);
+    var selectedVals = def.key === 'qualities'
+      ? APP.f.qualities
+      : (APP.f.attrs[def.key.slice(5)] || []);
     var items = [];
-    (def.items || []).forEach(function(val, j) {
+    selectedVals.forEach(function(val, j) {
       var subRows;
       if (def.key === 'qualities') {
-        subRows = baseRows.filter(function(r) { return r.quality === val; });
+        subRows = APP.d.rows.filter(function(r) { return r.quality === val; });
       } else if (def.key.startsWith('attr:')) {
         var attr = def.key.slice(5);
-        subRows = baseRows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
+        subRows = APP.d.rows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
       }
       if (subRows && subRows.length > 0) {
         var safeId = 'bbd_' + def.key.replace(/[^a-zA-Z0-9]/g,'_') + '_' + j;
@@ -1706,7 +1712,8 @@ function getPredBrandLabel(r) {
 function buildBrandAccuracy(rows) {
   const map = {};
   for (const r of rows) {
-    const brand = r.gt_brand || 'Unknown';
+    const brand = r.gt_brand;
+    if (!brand || _isBlankVal(brand)) continue;
     if (!map[brand]) {
       const comp = (APP.d.mMap[r.gt.toLowerCase()] && APP.d.mMap[r.gt.toLowerCase()].competition) || r.gt_comp || '';
       map[brand] = { brand, correct:0, total:0, competition:comp, errors:{} };
@@ -1842,8 +1849,9 @@ function buildVariantAccuracy(rows) {
   for (const r of rows) {
     const b = r.gt_brand || '';
     const v = r.gt_variant || '';
+    if (!b && !v) continue;
     const key = b + '||' + v;
-    const label = b && v ? (b + ' · ' + v) : (b || v || 'Unknown');
+    const label = b && v ? (b + ' · ' + v) : (b || v);
     if (!map[key]) map[key] = { label, brand:b, variant:v, correct:0, total:0, errors:{} };
     map[key].total++;
     const vBrandMatch = r.pred_brand === b;
@@ -1917,7 +1925,8 @@ function toggleVariantDrill(idx) {
 function buildSkuAccuracy(rows) {
   const map = {};
   for (const r of rows) {
-    const sku = r.gt || 'Unknown';
+    const sku = r.gt;
+    if (!sku || _isBlankVal(sku)) continue;
     if (!map[sku]) map[sku] = { sku, brand:r.gt_brand, correct:0, total:0, errors:{} };
     map[sku].total++;
     if (r.is_correct) {

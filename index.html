@@ -11,17 +11,37 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
-    --bg:      #0a0f1e;
-    --card:    #111827;
-    --card2:   #1a2435;
-    --border:  #1f2937;
-    --blue:    #3b82f6;
-    --green:   #10b981;
-    --amber:   #f59e0b;
-    --red:     #ef4444;
-    --violet:  #8b5cf6;
-    --text:    #f1f5f9;
-    --muted:   #64748b;
+    --bg:           #0a0f1e;
+    --card:         #111827;
+    --card2:        #1a2435;
+    --border:       #1f2937;
+    --blue:         #3b82f6;
+    --green:        #10b981;
+    --amber:        #f59e0b;
+    --red:          #ef4444;
+    --violet:       #8b5cf6;
+    --text:         #f1f5f9;
+    --muted:        #64748b;
+    --thead:        #192236;
+    --card3:        #060c1a;
+    --sidebar-bg:   #0d1424;
+    --row-sep:      rgba(31,41,55,.5);
+    --sticky-hover: #13203a;
+    --scrollbar:    #374151;
+  }
+  body.light {
+    --bg:           #f1f5f9;
+    --card:         #ffffff;
+    --card2:        #f8fafc;
+    --border:       #e2e8f0;
+    --text:         #0f172a;
+    --muted:        #64748b;
+    --thead:        #eef2ff;
+    --card3:        #f1f5f9;
+    --sidebar-bg:   #f8fafc;
+    --row-sep:      rgba(226,232,240,.8);
+    --sticky-hover: #eff6ff;
+    --scrollbar:    #cbd5e1;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
@@ -29,7 +49,7 @@
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 
   /* ── Upload zones ── */
   .zone { border: 2px dashed var(--border); border-radius: 14px; padding: 32px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
@@ -64,13 +84,13 @@
   .tbl { width:100%; border-collapse:collapse; }
   .tbl thead th {
     position:sticky; top:0; z-index:20;
-    background:#192236; color:var(--muted);
+    background:var(--thead); color:var(--muted);
     font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;
     padding:9px 12px; white-space:nowrap; border-bottom:1px solid var(--border);
     text-align:right;
   }
   .tbl thead th.left { text-align:left; }
-  .tbl tbody tr { border-bottom:1px solid rgba(31,41,55,.5); transition:background .12s; }
+  .tbl tbody tr { border-bottom:1px solid var(--row-sep); transition:background .12s; }
   .tbl tbody tr:hover { background:rgba(59,130,246,.05); }
   .tbl tbody td { padding:7px 12px; font-size:.79rem; white-space:nowrap; text-align:right; }
   .tbl tbody td.left { text-align:left; }
@@ -78,9 +98,9 @@
   /* Sticky first two columns */
   .tbl .s1 { position:sticky; left:0; z-index:10; background:var(--card); }
   .tbl .s2 { position:sticky; left:180px; z-index:10; background:var(--card); }
-  .tbl thead .s1, .tbl thead .s2 { background:#192236; z-index:30; }
+  .tbl thead .s1, .tbl thead .s2 { background:var(--thead); z-index:30; }
   .tbl tbody tr:hover .s1,
-  .tbl tbody tr:hover .s2 { background:#13203a; }
+  .tbl tbody tr:hover .s2 { background:var(--sticky-hover); }
 
   /* ── Progress bar ── */
   .prog-wrap { background:var(--border); border-radius:3px; height:3px; overflow:hidden; width:240px; }
@@ -117,8 +137,17 @@
   .main-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
   .main-tab:hover:not(.active) { color:var(--text); }
 
+  /* ── Theme toggle button ── */
+  .theme-btn {
+    width:32px; height:32px; border-radius:50%; border:1px solid var(--border);
+    background:var(--card2); color:var(--muted); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.85rem; transition:all .18s;
+  }
+  .theme-btn:hover { background:var(--blue); color:#fff; border-color:var(--blue); }
+
   /* ── Drill-down expanded content ── */
-  .drill-wrap { background:#060c1a; padding:12px 16px 14px 50px; border-bottom:2px solid rgba(245,158,11,.2); }
+  .drill-wrap { background:var(--card3); padding:12px 16px 14px 50px; border-bottom:2px solid rgba(245,158,11,.2); }
   .drill-title { font-size:.67rem; text-transform:uppercase; letter-spacing:.06em; color:var(--amber); margin-bottom:9px; }
 
   /* ── Image chips in drill-downs ── */
@@ -150,12 +179,15 @@
      UPLOAD SCREEN
 ══════════════════════════════════════════ -->
 <div id="uploadScreen" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
+  <div style="position:fixed;top:14px;right:16px;">
+    <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme" id="themeToggleBtnUpload"><i class="fas fa-sun"></i></button>
+  </div>
   <div style="text-align:center;margin-bottom:48px;">
     <div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:12px;">
       <div style="width:44px;height:44px;background:rgba(59,130,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;">
         <i class="fas fa-chart-bar" style="color:var(--blue);font-size:1.1rem;"></i>
       </div>
-      <h1 style="font-size:1.7rem;font-weight:800;color:#fff;">CV Accuracy Dashboard</h1>
+      <h1 style="font-size:1.7rem;font-weight:800;color:var(--text);">CV Accuracy Dashboard</h1>
     </div>
     <p style="color:var(--muted);max-width:480px;line-height:1.6;font-size:.9rem;">Upload your detection data, image quality mapping, and product masterdata to analyze computer vision model accuracy — all processing happens locally in your browser.</p>
   </div>
@@ -168,7 +200,7 @@
       <div style="width:56px;height:56px;background:rgba(59,130,246,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
         <i class="fas fa-table" style="color:var(--blue);font-size:1.4rem;"></i>
       </div>
-      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Detection Data</div>
+      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Detection Data</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Bounding box level AI predictions vs Ground Truth</div>
       <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-det" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
@@ -186,7 +218,7 @@
       <div style="width:56px;height:56px;background:rgba(16,185,129,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
         <i class="fas fa-image" style="color:var(--green);font-size:1.4rem;"></i>
       </div>
-      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Image Quality</div>
+      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Image Quality</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Maps session IDs to image quality tiers</div>
       <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-iq" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
@@ -204,7 +236,7 @@
       <div style="width:56px;height:56px;background:rgba(139,92,246,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
         <i class="fas fa-database" style="color:var(--violet);font-size:1.4rem;"></i>
       </div>
-      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Masterdata</div>
+      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Masterdata</div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Product catalog with brand, variant &amp; size attributes</div>
       <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-md" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
@@ -244,7 +276,7 @@
 <div id="mappingModal">
   <div class="modal-box">
     <div style="padding:22px 24px;border-bottom:1px solid var(--border);">
-      <div style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:4px;">Column Mapping</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:4px;">Column Mapping</div>
       <div style="font-size:.82rem;color:var(--muted);">Verify that the detected column mappings are correct for each file before processing.</div>
     </div>
     <div style="display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);">
@@ -286,12 +318,13 @@
   <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;">
     <div style="display:flex;align-items:center;gap:10px;">
       <i class="fas fa-chart-bar" style="color:var(--blue);font-size:1rem;"></i>
-      <span style="font-weight:800;font-size:1rem;color:#fff;">CV Accuracy Dashboard</span>
+      <span style="font-weight:800;font-size:1rem;color:var(--text);">CV Accuracy Dashboard</span>
     </div>
     <div id="topStats" style="display:flex;gap:20px;font-size:.75rem;color:var(--muted);"></div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div id="qualWarn" style="display:none;" class="warn"><i class="fas fa-exclamation-triangle"></i>Quality file: 0 sessions matched — verify session ID column mapping.</div>
       <button class="btn btn-ghost btn-sm" onclick="resetAll()"><i class="fas fa-upload"></i> Re-upload</button>
+      <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme" id="themeToggleBtn"><i class="fas fa-sun"></i></button>
     </div>
   </div>
 
@@ -299,7 +332,7 @@
   <div style="display:flex;flex:1;overflow:hidden;">
 
     <!-- Sidebar -->
-    <div style="width:260px;flex-shrink:0;overflow-y:auto;background:#0d1424;border-right:1px solid var(--border);padding:14px 16px;">
+    <div style="width:260px;flex-shrink:0;overflow-y:auto;background:var(--sidebar-bg);border-right:1px solid var(--border);padding:14px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Filters</span>
         <button onclick="resetFilters()" style="font-size:.72rem;color:var(--blue);background:none;border:none;cursor:pointer;">Reset All</button>
@@ -354,7 +387,7 @@
           <div style="height:320px;"><canvas id="chart3"></canvas></div>
         </div>
         <div class="card">
-          <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px;">
             <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy
             <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(GT level — click row to drill down)</span>
           </div>
@@ -365,7 +398,7 @@
         <div class="card" style="margin-top:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
             <div>
-              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+              <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
                 <i class="fas fa-list-check" style="color:var(--green);"></i>Brand Demonstration Sheet
                 <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level — Top 15 competitor brands)</span>
               </div>
@@ -390,7 +423,7 @@
           <div style="height:320px;"><canvas id="chart4"></canvas></div>
         </div>
         <div class="card">
-          <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px;">
             <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy
             <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Brand + Pack Type — click row to drill down)</span>
           </div>
@@ -405,7 +438,7 @@
         <div class="card">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
             <div>
-              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+              <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
                 <i class="fas fa-microscope" style="color:var(--amber);"></i>SKU Accuracy
                 <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(QC Display Name — click row to drill down)</span>
               </div>
@@ -420,7 +453,7 @@
         <div class="card" style="margin-top:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
             <div>
-              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+              <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
                 <i class="fas fa-ruler-combined" style="color:var(--amber);"></i>Size Demonstration Sheet
                 <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level)</span>
               </div>
@@ -442,7 +475,7 @@
         <!-- Run history table -->
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-            <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
               <i class="fas fa-history" style="color:var(--blue);"></i>Model Run History
               <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(stored in browser · survives page refresh)</span>
             </div>
@@ -1351,11 +1384,14 @@ function sTh(label, table, col, cls, style) {
 // CHARTS
 // ═══════════════════════════════════════════════════════════
 
-const CHART_DEFAULTS = {
-  gridColor: '#1f2937',
-  textColor: '#64748b',
-  tickColor: '#94a3b8'
-};
+function getChartDefaults() {
+  var isLight = document.body.classList.contains('light');
+  return {
+    gridColor: isLight ? '#e2e8f0' : '#1f2937',
+    textColor: isLight ? '#64748b' : '#64748b',
+    tickColor: isLight ? '#475569' : '#94a3b8'
+  };
+}
 
 function renderChart1(rows) {
   const byQ = {};
@@ -1379,8 +1415,8 @@ function renderChart1(rows) {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%'; } } } },
       scales: {
-        x: { min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y: { ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:11} }, grid:{ display:false } }
+        x: { min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } },
+        y: { ticks:{ color:getChartDefaults().tickColor, font:{size:11} }, grid:{ display:false } }
       }
     }
   });
@@ -1421,12 +1457,12 @@ function renderChart2(rows) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        legend: { labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
         tooltip: { callbacks:{ label: function(c) { return ' ' + c.dataset.label + ': ' + c.raw + '%'; } } }
       },
       scales: {
-        x: { ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y: { min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+        x: { ticks:{ color:getChartDefaults().textColor, font:{size:9}, maxRotation:35 }, grid:{ color:getChartDefaults().gridColor } },
+        y: { min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
       }
     }
   });
@@ -1460,8 +1496,8 @@ function renderBrandChart(rows) {
         tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
       },
       scales:{
-        x:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:CHART_DEFAULTS.gridColor} },
-        y:{ ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:10} }, grid:{display:false} }
+        x:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:getChartDefaults().gridColor} },
+        y:{ ticks:{ color:getChartDefaults().tickColor, font:{size:10} }, grid:{display:false} }
       }
     }
   });
@@ -1497,8 +1533,8 @@ function renderVariantChart(rows) {
         tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
       },
       scales:{
-        x:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:CHART_DEFAULTS.gridColor} },
-        y:{ ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:10} }, grid:{display:false} }
+        x:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:getChartDefaults().gridColor} },
+        y:{ ticks:{ color:getChartDefaults().tickColor, font:{size:10} }, grid:{display:false} }
       }
     }
   });
@@ -1895,7 +1931,7 @@ function renderBrandDemo() {
     sTh('Non-NARTD','bd','nonNARTD','','min-width:95px;') +
     sTh('Others','bd','others','','min-width:75px;') +
     brands.map(function(b) { return sTh(b.length > 9 ? b.slice(0,8)+'…' : b, 'bd', 'bc:'+b, '', 'min-width:80px;'); }).join('') +
-    sTh('Total GT','bd','total','','min-width:80px;background:#182030;') +
+    sTh('Total GT','bd','total','','min-width:80px;background:var(--thead);') +
     '</tr>';
 
   if (!sl.length) {
@@ -2227,11 +2263,11 @@ function renderKpiTrendChart(history) {
     type:'line', data:{ labels:labels, datasets:datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+      plugins:{ legend:{ labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
         tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
       scales:{
-        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+        x:{ ticks:{ color:getChartDefaults().textColor, font:{size:9}, maxRotation:35 }, grid:{ color:getChartDefaults().gridColor } },
+        y:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
       }
     }
   });
@@ -2273,11 +2309,11 @@ function renderBrandTrendChart(history) {
     type:'line', data:{ labels:labels, datasets:datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+      plugins:{ legend:{ labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
         tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
       scales:{
-        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+        x:{ ticks:{ color:getChartDefaults().textColor, font:{size:9}, maxRotation:35 }, grid:{ color:getChartDefaults().gridColor } },
+        y:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
       }
     }
   });
@@ -2303,11 +2339,11 @@ function renderVariantTrendChart(history) {
     type:'line', data:{ labels:labels, datasets:datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+      plugins:{ legend:{ labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
         tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
       scales:{
-        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+        x:{ ticks:{ color:getChartDefaults().textColor, font:{size:9}, maxRotation:35 }, grid:{ color:getChartDefaults().gridColor } },
+        y:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
       }
     }
   });
@@ -2334,11 +2370,11 @@ function renderSkuTrendChart(history) {
     type:'line', data:{ labels:labels, datasets:datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+      plugins:{ legend:{ labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
         tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
       scales:{
-        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
-        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+        x:{ ticks:{ color:getChartDefaults().textColor, font:{size:9}, maxRotation:35 }, grid:{ color:getChartDefaults().gridColor } },
+        y:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
       }
     }
   });
@@ -2385,6 +2421,39 @@ function resetAll() {
   var d = document.getElementById('inp-runDate');
   if (d) d.value = new Date().toISOString().split('T')[0];
 })();
+
+// ── Theme ──────────────────────────────────────────────────────
+var THEME_KEY = 'cci_theme';
+function applyTheme(theme) {
+  var icon = theme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+  if (theme === 'light') {
+    document.body.classList.add('light');
+  } else {
+    document.body.classList.remove('light');
+  }
+  ['themeToggleBtn','themeToggleBtnUpload'].forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (btn) btn.innerHTML = icon;
+  });
+  // Refresh all active charts so colors update
+  var chartKeys = Object.keys(APP.charts);
+  var hasCharts = chartKeys.some(function(k) { return APP.charts[k]; });
+  if (hasCharts && document.getElementById('dashboard').style.display !== 'none') {
+    renderActiveTabContent();
+  }
+}
+function toggleTheme() {
+  var isLight = document.body.classList.contains('light');
+  var next = isLight ? 'dark' : 'light';
+  try { localStorage.setItem(THEME_KEY, next); } catch(e) {}
+  applyTheme(next);
+}
+function initTheme() {
+  var saved = 'dark';
+  try { saved = localStorage.getItem(THEME_KEY) || 'dark'; } catch(e) {}
+  applyTheme(saved);
+}
+initTheme();
 </script>
 </body>
 </html>

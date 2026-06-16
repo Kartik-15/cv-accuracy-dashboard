@@ -1483,7 +1483,7 @@ function renderBrandChart(rows) {
     const b = r.gt_brand || 'Unknown';
     if (!bs[b]) bs[b] = { c:0, t:0 };
     bs[b].t++;
-    if (r.is_correct) bs[b].c++;
+    if (r.pred_brand === b) bs[b].c++;
   }
   const top15 = Object.entries(bs)
     .filter(function([b]) { return b && b !== 'Unknown'; })
@@ -1521,7 +1521,9 @@ function renderVariantChart(rows) {
     const key = b && v ? (b + ' · ' + v) : (b || v);
     if (!vs[key]) vs[key] = { c:0, t:0 };
     vs[key].t++;
-    if (r.is_correct) vs[key].c++;
+    const brandMatch = r.pred_brand === b;
+    const varMatch   = v !== '' ? (r.pred_variant === v) : true;
+    if (brandMatch && varMatch) vs[key].c++;
   }
   const top15 = Object.entries(vs)
     .sort(function(a,b) { return b[1].t - a[1].t; })
@@ -1582,7 +1584,7 @@ function buildBrandAccuracy(rows) {
       map[brand] = { brand, correct:0, total:0, competition:comp, errors:{} };
     }
     map[brand].total++;
-    if (r.is_correct) {
+    if (r.pred_brand === brand) {
       map[brand].correct++;
     } else {
       const pb = getPredBrandLabel(r);
@@ -1716,7 +1718,9 @@ function buildVariantAccuracy(rows) {
     const label = b && v ? (b + ' · ' + v) : (b || v || 'Unknown');
     if (!map[key]) map[key] = { label, brand:b, variant:v, correct:0, total:0, errors:{} };
     map[key].total++;
-    if (r.is_correct) {
+    const vBrandMatch = r.pred_brand === b;
+    const vVarMatch   = v !== '' ? (r.pred_variant === v) : true;
+    if (vBrandMatch && vVarMatch) {
       map[key].correct++;
     } else {
       const pb = getPredBrandLabel(r);

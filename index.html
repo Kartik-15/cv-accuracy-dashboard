@@ -300,10 +300,11 @@
 
     <!-- Sidebar -->
     <div style="width:260px;flex-shrink:0;overflow-y:auto;background:#0d1424;border-right:1px solid var(--border);padding:14px 16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Filters</span>
         <button onclick="resetFilters()" style="font-size:.72rem;color:var(--blue);background:none;border:none;cursor:pointer;">Reset All</button>
       </div>
+      <div id="filterSectionPicker" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);"></div>
       <div id="filtersBox"></div>
     </div>
 
@@ -973,6 +974,39 @@ const unique = function(arr) { return [...new Set(arr.filter(function(v) { retur
 // FILTERS
 // ═══════════════════════════════════════════════════════════
 
+// ── Filter section visibility (persisted in localStorage) ──
+const FILTER_SECTIONS_KEY = 'cci_filter_sections_v1';
+const FILTER_SECTION_DEFS = [
+  { key:'qualities', icon:'fa-star',   color:'var(--blue)',   label:'Image Quality',       searchable:false },
+  { key:'brands',    icon:'fa-tag',    color:'var(--green)',  label:'GT Brand',            searchable:true  },
+  { key:'variants',  icon:'fa-box',    color:'var(--violet)', label:'Variant / Pack Type', searchable:false },
+  { key:'measures',  icon:'fa-ruler',  color:'var(--amber)',  label:'SKU Size (ml)',       searchable:true  }
+];
+
+function loadFilterSections() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_SECTIONS_KEY));
+    if (Array.isArray(saved)) return new Set(saved);
+  } catch(e) {}
+  return new Set(['qualities','brands','measures']);
+}
+APP._visibleFilterSections = loadFilterSections();
+
+function saveFilterSections() {
+  localStorage.setItem(FILTER_SECTIONS_KEY, JSON.stringify([...APP._visibleFilterSections]));
+}
+
+function toggleFilterSection(key) {
+  if (APP._visibleFilterSections.has(key)) {
+    APP._visibleFilterSections.delete(key);
+    APP.f[key] = [];
+  } else {
+    APP._visibleFilterSections.add(key);
+  }
+  saveFilterSections();
+  renderAll();
+}
+
 function filteredRows() {
   const f = APP.f;
   return APP.d.rows.filter(function(r) {
@@ -985,12 +1019,26 @@ function filteredRows() {
 }
 
 function renderFilters() {
+  const picker = document.getElementById('filterSectionPicker');
+  picker.innerHTML = FILTER_SECTION_DEFS.map(function(def) {
+    const on = APP._visibleFilterSections.has(def.key);
+    return '<button onclick="toggleFilterSection(\'' + def.key + '\')" style="' +
+      'display:inline-flex;align-items:center;gap:4px;font-size:.69rem;font-weight:600;' +
+      'padding:3px 8px;border-radius:20px;cursor:pointer;border:1px solid;transition:all .15s;' +
+      (on
+        ? 'background:' + def.color + '22;color:' + def.color + ';border-color:' + def.color + '55;'
+        : 'background:transparent;color:var(--muted);border-color:var(--border);') +
+      '" title="' + (on ? 'Hide' : 'Show') + ' ' + def.label + ' filter">' +
+      '<i class="fas ' + def.icon + '" style="font-size:.6rem;"></i>' +
+      def.label.split(' ')[0] +
+      '</button>';
+  }).join('');
+
   const box = document.getElementById('filtersBox');
-  box.innerHTML =
-    filterSection('qualities', 'fa-star',   'var(--blue)',   'Image Quality',       APP.d.qualities, false) +
-    filterSection('variants',  'fa-box',    'var(--violet)', 'Variant / Pack Type', APP.d.variants,  false) +
-    filterSection('brands',    'fa-tag',    'var(--green)',  'GT Brand',            APP.d.brands,    true) +
-    filterSection('measures',  'fa-ruler',  'var(--amber)',  'SKU Size (ml)',       APP.d.measures,  true);
+  box.innerHTML = FILTER_SECTION_DEFS
+    .filter(function(def) { return APP._visibleFilterSections.has(def.key); })
+    .map(function(def) { return filterSection(def.key, def.icon, def.color, def.label, APP.d[def.key] || [], def.searchable); })
+    .join('');
 }
 
 function filterSection(key, icon, color, label, items, searchable) {
@@ -1035,6 +1083,12 @@ function resetFilters() {
   APP._skuExpanded = new Set();
   APP._brandExpanded = new Set();
   APP._variantExpanded = new Set();
+  renderAll();
+}
+
+function resetFilterSections() {
+  APP._visibleFilterSections = new Set(['qualities','brands','measures']);
+  saveFilterSections();
   renderAll();
 }
 

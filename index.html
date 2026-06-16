@@ -345,7 +345,7 @@
     <div style="flex:1;overflow-y:auto;padding:20px;">
 
       <!-- Headline stats (always visible) -->
-      <div id="headlineStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;"></div>
+      <div id="headlineStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;"></div>
 
       <!-- KPI cards (4, always visible) -->
       <div id="kpiRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;"></div>
@@ -876,7 +876,7 @@ function buildMasterdataMap(rows, cols) {
 
   const SKIP_ATTR = new Set(['display name','display_name','display name ','competition']);
   const map = {};
-  for (const [, attrs] of Object.entries(byClass)) {
+  for (const [cname, attrs] of Object.entries(byClass)) {
     const dn = cl(attrs['Display Name'] || attrs['display_name'] || attrs['display name'] || '');
     if (!dn) continue;
     const key = dn.toLowerCase();
@@ -886,10 +886,12 @@ function buildMasterdataMap(rows, cols) {
       if (!SKIP_ATTR.has(k.toLowerCase()) && v && v !== '') rawAttrs[k] = v;
     }
     map[key] = {
-      brand:    cl(attrs['Brand'] || ''),
-      variant:  cl(attrs['Pack type'] || attrs['Variant'] || ''),
-      measure:  parseInt(cl(attrs['measure'] || '0')) || 0,
-      subcat:   cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
+      brand:      cl(attrs['Brand'] || ''),
+      variant:    cl(attrs['Pack type'] || attrs['Variant'] || ''),
+      measure:    parseInt(cl(attrs['measure'] || '0')) || 0,
+      subcat:     cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
+      group:      cl(attrs['group_name'] || attrs['Group Name'] || attrs['Group'] || ''),
+      class_name: cname,
       competition: cl(attrs.competition || ''),
       attrs: rawAttrs
     };
@@ -922,19 +924,21 @@ function enrichRows(detRows, qMap, mMap, cols) {
     const quality = qMap.get(sid) || embQual || 'Unknown';
     const is_correct = gt !== '' && gt === pred;
 
-    const gta = mMap[gt.toLowerCase()]   || { brand:'', variant:'', measure:0, subcat:'', competition:'' };
-    const pra = mMap[pred.toLowerCase()] || { brand:'', variant:'', measure:0, subcat:'', competition:comp };
+    const gta = mMap[gt.toLowerCase()]   || { brand:'', variant:'', measure:0, subcat:'', group:'', class_name:'', competition:'' };
+    const pra = mMap[pred.toLowerCase()] || { brand:'', variant:'', measure:0, subcat:'', group:'', class_name:'', competition:comp };
 
     out.push({
       sid, gt, pred, comp, fp, quality, is_correct,
-      gt_brand:   gta.brand,
-      gt_variant: gta.variant,
-      gt_measure: gta.measure,
-      gt_comp:    gta.competition || (comp === 'self' ? '' : ''),
-      gt_attrs:   gta.attrs || {},
-      pred_brand:   pra.brand,
-      pred_variant: pra.variant,
-      pred_measure: pra.measure
+      gt_brand:      gta.brand,
+      gt_variant:    gta.variant,
+      gt_measure:    gta.measure,
+      gt_group:      gta.group,
+      gt_class:      gta.class_name,
+      gt_comp:       gta.competition || (comp === 'self' ? '' : ''),
+      gt_attrs:      gta.attrs || {},
+      pred_brand:    pra.brand,
+      pred_variant:  pra.variant,
+      pred_measure:  pra.measure
     });
   }
   return out;
@@ -1252,19 +1256,18 @@ function kpiBadge(v) {
 const pct = function(v) { return (v * 100).toFixed(1) + '%'; };
 
 function renderHeadlineStats(rows) {
-  const imgs     = unique(rows.map(function(r) { return r.sid; })).length;
-  const brands   = unique(rows.filter(function(r) { return r.gt_brand; }).map(function(r) { return r.gt_brand; })).length;
-  const variants = unique(rows.filter(function(r) { return r.gt_variant; }).map(function(r) { return r.gt_variant; })).length;
-  const groups   = unique(rows.map(function(r) {
-    const m = APP.d.mMap[r.gt.toLowerCase()];
-    return m ? m.subcat : null;
-  }).filter(Boolean)).length;
+  const imgs    = unique(rows.map(function(r) { return r.sid; })).length;
+  const brands  = unique(rows.filter(function(r) { return r.gt_brand; }).map(function(r) { return r.gt_brand; })).length;
+  const groups  = unique(rows.filter(function(r) { return r.gt_group; }).map(function(r) { return r.gt_group; })).length;
+  const classes = unique(rows.filter(function(r) { return r.gt_class; }).map(function(r) { return r.gt_class; })).length;
+  const skus    = unique(rows.filter(function(r) { return r.gt; }).map(function(r) { return r.gt.toLowerCase(); })).length;
 
   const stats = [
-    { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),      label:'Images' },
-    { icon:'fa-tag',         color:'var(--green)',  bg:'rgba(16,185,129,.12)',  num:brands.toLocaleString(),    label:'Unique Brands' },
-    { icon:'fa-box',         color:'var(--violet)', bg:'rgba(139,92,246,.12)', num:variants.toLocaleString(),  label:'Unique Variants' },
-    { icon:'fa-layer-group', color:'var(--amber)',  bg:'rgba(245,158,11,.12)', num:groups.toLocaleString(),    label:'Unique Groups' }
+    { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),     label:'Images' },
+    { icon:'fa-tag',         color:'var(--green)',  bg:'rgba(16,185,129,.12)',  num:brands.toLocaleString(),   label:'Unique Brands' },
+    { icon:'fa-layer-group', color:'var(--amber)',  bg:'rgba(245,158,11,.12)', num:groups.toLocaleString(),   label:'Unique Groups' },
+    { icon:'fa-sitemap',     color:'var(--red)',    bg:'rgba(239,68,68,.12)',   num:classes.toLocaleString(),  label:'Unique Classes' },
+    { icon:'fa-barcode',     color:'var(--violet)', bg:'rgba(139,92,246,.12)', num:skus.toLocaleString(),     label:'Unique SKUs' }
   ];
   document.getElementById('headlineStats').innerHTML = stats.map(function(s) {
     return '<div class="hstat">' +

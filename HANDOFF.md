@@ -17,7 +17,7 @@ Deployment: GitHub Pages, served from `main` branch root. `.nojekyll` file preve
 
 | File | Status | Note |
 |------|--------|------|
-| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~2200+ lines) |
+| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~2450+ lines) |
 | `.nojekyll` | **ACTIVE** | Required for GitHub Pages to serve `index.html` directly |
 | `CGC_New_15th June.csv` | **ACTIVE** | Canonical masterdata sample (CGC pivot format) |
 | `Accuracy Sheet.xlsx` | **ACTIVE** | Sample detection data (use `Raw` sheet) |
@@ -56,16 +56,19 @@ Core accuracy analysis + trend tracking is feature-complete. The next major feat
 6. **Enriched bounding-box rows** — joins quality and masterdata attributes onto each detection row; computes `is_correct` fresh from GT vs Prediction string equality.
 7. **Headline stat cards** — Images, Unique Brands, Unique Variants, Unique Groups (subcats). Always visible at top of dashboard, filter-reactive.
 8. **KPI cards** — Object Accuracy, Macro Precision, Macro Recall, Macro F1 with color-coded threshold badges (≥90% emerald, 75–89% amber, <75% red).
-9. **Multi-tab layout** — 7 main tabs: Overview, Brand Analysis, Variant Analysis, SKU Analysis, Brand Demo, Size Demo, Trends.
+9. **Multi-tab layout** — 5 main tabs: Overview, Brand Analysis, Variant Analysis, SKU Analysis, Trends. Brand Demo is embedded at the bottom of Brand Analysis; Size Demo is embedded at the bottom of SKU Analysis.
 10. **Lazy tab rendering** — only the active tab's charts/tables re-render on filter change, avoiding hidden-canvas sizing bugs.
 11. **Overview tab** — Accuracy by Image Quality chart (c1) + Brand/Variant/SKU top-10 grouped bar (c2).
 12. **Brand Analysis tab** — Top-15 horizontal bar chart (c3) + brand accuracy pivot with click-to-expand drill-down. Drill-down shows predicted brand names (aggregated), error counts, % of errors, and up to 6 inline image chip links per brand.
 13. **Variant Analysis tab** — Top-15 horizontal bar chart (c4) + variant accuracy pivot with same drill-down structure as Brand.
 14. **SKU Analysis tab** — SKU accuracy table sorted by error count descending, with click-to-expand misclassification drill-down (same brand-level aggregation + image chips).
-15. **Brand Demo tab** — Image-level aggregation for CCI (self) GT items only. Top-15 competitor brands by actual error frequency (dynamic from filtered data), not all masterdata brands. Paginated (25/page), searchable, CSV exportable.
-16. **Size Demo tab** — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable.
+15. **Brand Demo card** (inside Brand Analysis tab) — Image-level aggregation for CCI (self) GT items only. Top-15 competitor brands by actual error frequency (dynamic from filtered data), not all masterdata brands. Paginated (25/page), searchable, CSV exportable. All columns sortable.
+16. **Size Demo card** (inside SKU Analysis tab) — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable. All columns sortable.
 17. **Trends tab** — Historical KPI line chart (c5), Brand accuracy trend selector + chart (c6), Variant accuracy trend selector + chart (c7), SKU accuracy trend selector + chart (c8). History table with per-run delete + Clear All. Data persisted in localStorage under key `cci_accuracy_history_v1`.
-18. **Sidebar filters** — Image Quality, GT Brand, Variant/Pack Type, SKU Size (ml). All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button.
+18. **Sidebar filters** — Fully dynamic from masterdata attributes. One filter section per attribute key (`Brand`, `Pack type`, `Variant`, `Sub category`, `measure`, etc.) plus Image Quality. All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button.
+19. **Configurable filter section picker** — Pill buttons at top of sidebar toggle which attribute filter sections are visible. Preference saved to localStorage (`cci_filter_sections_v2`). Default visible: Image Quality + Brand.
+20. **Sortable columns** — All tables (Brand Accuracy, Variant Accuracy, SKU Accuracy, Brand Demo, Size Demo) have clickable column headers. First click = descending; second click = ascending; click new column = switch. Sort state lives in `APP._sort`.
+21. **Light/dark theme toggle** — Sun/moon button in top bar and upload screen. Saves to localStorage (`cci_theme`). CSS custom properties used throughout; `getChartDefaults()` returns chart colors matching current theme.
 19. **Image viewer links** — session IDs in drill-downs rendered as `.img-chip` elements linking to `https://view.shelfwatch.io?url={file_path}` with quality badge overlay.
 
 ### Current Status
@@ -233,12 +236,10 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 │       └─ renderActiveTabContent(rows)                │
 │             │                                        │
 │             ├─ overview:   c1 (quality bar), c2 (brand bar)
-│             ├─ brand:      c3 (top-15 bar) + pivot + drill-downs
-│             ├─ variant:    c4 (top-15 bar) + pivot + drill-downs
-│             ├─ sku:        SKU accuracy table + drill-downs
-│             ├─ brandDemo:  dynamic-column table + CSV export
-│             ├─ sizeDemo:   size error table + CSV export
-│             └─ trends:     c5 (KPI), c6 (brand), c7 (variant), c8 (SKU)
+│             ├─ brand:    c3 (top-15 bar) + pivot + drill-downs + Brand Demo card
+│             ├─ variant:  c4 (top-15 bar) + pivot + drill-downs
+│             ├─ sku:      SKU accuracy table + drill-downs + Size Demo card
+│             └─ trends:   c5 (KPI), c6 (brand), c7 (variant), c8 (SKU)
 │                            + history table (delete / clear all)
 └──────────────────────────────────────────────────────┘
 ```
@@ -295,10 +296,13 @@ APP = {
     modelId: string,
     date: string
   },
-  f:     { qualities:[], brands:[], variants:[], measures:[] },
+  f:     { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
+  // attrs: { [attrKey]: string[] } — active attr filter selections
   pg:    { bd: {page,size,q,rows}, sd: {page,size,q,rows} },
   tabs:  { main: 'overview' },
   charts: { c1, c2, c3, c4, c5, c6, c7, c8 },
+  _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
+  _visibleFilterSections: Set,  // loaded from localStorage 'cci_filter_sections_v2'
   _sdBrands: [],           // brands with size errors (dynamic, side-effect of buildSizeDemoRows)
   _skuExpanded: Set,       // expanded SKU drill-down rows
   _skuQ: string,           // SKU search query
@@ -311,6 +315,10 @@ APP = {
   _pivotBrand: [],         // current brand pivot data
   _pivotVariant: []        // current variant pivot data
 }
+
+// APP.d also includes:
+APP.d.attrKeys  = string[]  // sorted list of all masterdata attribute keys (excl. Display Name, competition)
+APP.d.attrValues = { [key]: string[] }  // unique values per attribute, numeric-sorted where possible
 ```
 
 ### File/Module Map
@@ -324,10 +332,10 @@ Accuracy Dashboard/
 │   ├── Column Mapping Modal (#mappingModal)
 │   ├── Processing Overlay (#procOverlay)
 │   ├── Dashboard (#dashboard)
-│   │   ├── Top bar (model ID + date + images + quality-matched stats, re-upload)
+│   │   ├── Top bar (model ID + date + images + quality-matched stats, re-upload, theme toggle)
 │   │   ├── Headline stat cards (Images, Brands, Variants, Groups)
-│   │   ├── Main tab nav (Overview | Brand | Variant | SKU | Brand Demo | Size Demo | Trends)
-│   │   ├── Sidebar (filter sections)
+│   │   ├── Main tab nav (Overview | Brand | Variant | SKU | Trends)
+│   │   ├── Sidebar (filter section picker pills + dynamic attribute filter sections)
 │   │   └── Tab content divs (one per main tab, hidden/shown)
 │   └── JavaScript
 │       ├── APP state object
@@ -339,7 +347,11 @@ Accuracy Dashboard/
 │       ├── buildTabHTML / switchTab / openMappingModal
 │       ├── processData (pipeline orchestrator; reads modelId/date; calls saveSnapshot)
 │       ├── buildMasterdataMap / buildQualityMap / enrichRows
-│       ├── filteredRows / renderFilters / toggleFilter
+│       ├── filteredRows / renderFilters / toggleFilter / toggleAttrFilter
+│       ├── loadFilterSections / buildFilterSectionDefs / getAttrStyle / renderFilterSectionPicker
+│       ├── sortTable / applySort / sTh  (sortable column helpers)
+│       ├── getChartDefaults()  (replaces CHART_DEFAULTS const; theme-aware)
+│       ├── applyTheme / toggleTheme / initTheme
 │       ├── computeMetrics
 │       ├── renderHeadlineStats / renderKPIs
 │       ├── MAIN_TABS / switchMainTab / renderActiveTabContent
@@ -505,6 +517,21 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **11. CGC pivot format as canonical masterdata**
 - `CGC_New_15th June.csv` (pivot format) is canonical. `Final Brand and Variant.csv` (pre-flattened) is superseded.
 
+**12. Brand Demo and Size Demo merged into Brand/SKU tabs**
+- **Decision:** Removed separate Brand Demo and Size Demo tabs; embedded them as cards inside Brand Analysis and SKU Analysis tabs respectively.
+- **Reasoning:** Fewer tabs reduces navigation overhead; demo sheets are contextually related to their parent accuracy tables.
+
+**13. Filters fully dynamic from masterdata attributes**
+- **Decision:** `buildMasterdataMap` stores all raw attributes in `entry.attrs` (skipping `Display Name` and `competition`). `processData` builds `APP.d.attrKeys` + `APP.d.attrValues` from those. `filteredRows` filters on `r.gt_attrs[attrName]`.
+- **Reasoning:** Hardcoded Variant/Pack-Type combination was wrong; each attribute should be its own filterable dimension.
+- **localStorage key:** `cci_filter_sections_v2` (not v1 — reset intentional to avoid stale section preferences).
+
+**14. Sort state is per-table, not global**
+- Each table has its own `{col, dir}` entry in `APP._sort`. `sortTable(table, col)` toggles or switches; `applySort(arr, table)` does the actual sort. Column headers rendered via `sTh()` helper include inline `onclick`.
+
+**15. Light/dark theme via CSS custom properties + body.light class**
+- `body.light` block in CSS overrides all `--var` values. JS only toggles the class + updates button icon. Chart colors handled by `getChartDefaults()` returning theme-appropriate values each time charts are created (charts are destroyed/recreated on tab switch anyway).
+
 ---
 
 ## Section 7: Bugs & Corrections
@@ -529,6 +556,10 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **6. Chart.js canvas sizing in hidden tabs**
 - **Problem:** Charts rendered into hidden `<div>` (display:none) tabs showed as 0×0 or wrong size.
 - **Fix:** Lazy rendering — tabs only render their charts when `switchMainTab()` makes them active.
+
+**7. Stuck-at-rendering overlay after dynamic attrs refactor**
+- **Problem:** `processData()` reset `APP.f = { qualities:[], brands:[], variants:[], measures:[] }` (missing `attrs:{}`). This overwrote `APP.f.attrs = {}` set earlier. `filteredRows()` called `Object.entries(undefined)` and threw, leaving the overlay stuck.
+- **Fix:** Changed reset to `APP.f = { qualities:[], brands:[], variants:[], measures:[], attrs:{} }`.
 
 ---
 
@@ -584,11 +615,12 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 ## Section 10: Preferences & Conventions
 
 - **Single-file architecture is intentional.** Distributed by sharing `index.html` or the GitHub Pages URL. No build tools, no npm, no bundling. Libraries loaded from CDN (Tailwind, FontAwesome, PapaParse, Chart.js, SheetJS).
-- **Dark theme is fixed** (`--bg: #0a0f1e`). No light mode planned.
+- **Dark theme is default**; light theme togglable via sun/moon button. CSS custom properties used throughout — no hardcoded dark colors in HTML.
 - **Table columns: right-align numbers, left-align labels** — enforced via `.left` class. Don't deviate.
 - **KPI color thresholds are hardcoded**: ≥90% = green, 75–89% = amber, <75% = red. Business-defined, not configurable.
 - **`cl()` is the universal cell normalizer** — always use `cl(row[colName])` when reading detection data. It handles null/undefined/whitespace.
 - **Chart.js instances c1–c8 are destroyed and recreated** each time their tab activates. `APP.charts.cN.destroy()` before creating new. Don't skip this or you'll leak canvas contexts.
+- **`getChartDefaults()` replaces the old `CHART_DEFAULTS` const** — it's a function that reads `document.body.classList.contains('light')` to return theme-appropriate colors. Always call it fresh when constructing a chart config, never cache the result.
 - **`resetAll()` destroys c1–c8** and resets all expand sets and trend selection arrays when re-uploading.
 - **Pagination state resets to 1** whenever filters change or new data is processed.
 - **`APP._sdBrands` is a side-effect of `buildSizeDemoRows`** — set inside that function; always call `buildSizeDemoRows` before reading `APP._sdBrands`.
@@ -612,6 +644,10 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2025 | Brand-level drill-down aggregation (getPredBrandLabel helper); errors restructured to embed image maps per brand; buildDrillContent rewritten to 3-arg signature; all 3 callers updated; inline image chip links (.img-chip) with quality badge in drill-downs |
 | June 2025 | Brand Demo switched to top-15 dynamic competitor columns (getTopCompetitorBrandsForDemo); all filters apply across all tabs via filteredRows() + renderActiveTabContent() |
 | June 2025 | Deployed to GitHub Pages: https://kartik-15.github.io/cv-accuracy-dashboard/ (repo: Kartik-15/cv-accuracy-dashboard; .nojekyll added) |
+| June 2025 | **Session 3:** Brand Demo moved into Brand Analysis tab; Size Demo moved into SKU Analysis tab (MAIN_TABS reduced to 5); sortable columns on all 5 tables via sTh()/applySort()/sortTable(); configurable filter section picker (localStorage key cci_filter_sections_v2) |
+| June 2025 | Dynamic attribute filters: all masterdata attrs stored in entry.attrs; one filter section per attr key; filteredRows() filters on r.gt_attrs; fixed stuck-at-rendering bug (attrs:{} missing from APP.f reset) |
+| June 2025 | Light/dark theme toggle: body.light class + CSS custom properties; getChartDefaults() replaces CHART_DEFAULTS const; sun/moon button on upload screen and top bar; preference saved to localStorage (cci_theme) |
+| June 2025 | USER_GUIDE.md created; HANDOFF.md updated to reflect session 3 changes |
 
 ---
 
@@ -654,17 +690,25 @@ KEY RULES:
 APP STATE:
 APP = {
   files, raw, cfg,
-  d: { rows, qMap, mMap, brands, qualities, variants, measures, subcats, modelId, date },
-  f: { qualities:[], brands:[], variants:[], measures:[] },
+  d: { rows, qMap, mMap, brands, qualities, variants, measures, subcats,
+       attrKeys:[], attrValues:{}, modelId, date },
+  f: { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
   pg: { bd:{page,size,q,rows}, sd:{page,size,q,rows} },
   tabs: { main: 'overview' },
   charts: { c1, c2, c3, c4, c5, c6, c7, c8 },
+  _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
+  _visibleFilterSections: Set,
   _sdBrands, _skuExpanded, _skuQ, _pivotSku,
   _trendBrands, _trendVariants, _trendSkus,
   _brandExpanded, _variantExpanded, _pivotBrand, _pivotVariant
 }
 
-CURRENT STATUS: Core features + trend tracking complete. Deployed to GitHub Pages.
+MAIN_TABS = ['overview','brand','variant','sku','trends']  // 5 tabs
+FILTER_SECTIONS_KEY = 'cci_filter_sections_v2'
+THEME_KEY = 'cci_theme'
+HISTORY_KEY = 'cci_accuracy_history_v1'
+
+CURRENT STATUS: Core features + trend tracking + dynamic filters + sortable tables + light/dark theme complete. Deployed to GitHub Pages.
 NEXT FEATURE: MSL — 4th file upload slot, join on store/session ID, compliance columns in Size Demo.
 
 SAMPLE DATA FILES in same folder:

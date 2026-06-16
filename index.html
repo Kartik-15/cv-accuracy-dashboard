@@ -969,7 +969,7 @@ async function processData() {
 
   showOverlay('Rendering…', 85); await tick();
 
-  APP.f = { qualities:[], brands:[], variants:[], measures:[] };
+  APP.f = { qualities:[], brands:[], variants:[], measures:[], attrs:{} };
   APP.pg = {
     bd: { page:1, size:25, q:'', rows:[] },
     sd: { page:1, size:25, q:'', rows:[] }

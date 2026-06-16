@@ -971,7 +971,8 @@ async function processData() {
   );
   showOverlay('Computing unique filter values…', 65); await tick();
 
-  APP.d.qualities = unique(APP.d.rows.map(function(r) { return r.quality; })).sort();
+  APP.d.qualities = unique(APP.d.rows.map(function(r) { return r.quality; }))
+    .filter(function(q) { return q && q !== 'Unknown'; }).sort();
   APP.d.brands    = unique(
     Object.values(APP.d.mMap)
       .map(function(v) { return v.brand; })
@@ -984,15 +985,16 @@ async function processData() {
   // Build dynamic attribute index from all masterdata attrs
   var attrKeySet = new Set();
   var attrValMap = {};
+  var EMPTY_VALS = new Set(['', 'unknown', 'n/a', '#n/a', '-', 'null', 'none', 'na']);
   Object.values(APP.d.mMap).forEach(function(entry) {
     Object.entries(entry.attrs || {}).forEach(function(kv) {
       var k = kv[0], v = kv[1];
       attrKeySet.add(k);
       if (!attrValMap[k]) attrValMap[k] = new Set();
-      if (v) attrValMap[k].add(v);
+      if (v && !EMPTY_VALS.has(v.toLowerCase())) attrValMap[k].add(v);
     });
   });
-  APP.d.attrKeys = Array.from(attrKeySet).sort();
+  APP.d.attrKeys = Array.from(attrKeySet).filter(function(k) { return attrValMap[k] && attrValMap[k].size > 0; }).sort();
   APP.d.attrValues = {};
   APP.d.attrKeys.forEach(function(k) {
     APP.d.attrValues[k] = Array.from(attrValMap[k]).sort(function(a,b) {

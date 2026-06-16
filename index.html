@@ -1121,6 +1121,22 @@ function filteredRows() {
   });
 }
 
+// Like filteredRows() but skips the filter for excludeKey so breakdown
+// charts can show all values of that dimension for comparison.
+function filteredRowsExcept(excludeKey) {
+  var f = APP.f;
+  var attrEntries = Object.entries(f.attrs);
+  return APP.d.rows.filter(function(r) {
+    if (excludeKey !== 'qualities' && f.qualities.length && !f.qualities.includes(r.quality)) return false;
+    for (var i = 0; i < attrEntries.length; i++) {
+      var attrName = attrEntries[i][0], vals = attrEntries[i][1];
+      if (excludeKey === 'attr:' + attrName) continue;
+      if (vals.length && !(r.gt_attrs && vals.includes(r.gt_attrs[attrName]))) return false;
+    }
+    return true;
+  });
+}
+
 function renderFilters() {
   var defs = buildFilterSectionDefs();
 
@@ -1335,7 +1351,7 @@ function renderActiveTabContent(rows) {
     renderChart2(rows);
   } else if (tab === 'brand') {
     renderBrandChart(rows);
-    renderBrandBreakdownCharts(rows);
+    renderBrandBreakdownCharts();
     renderBrandAccuracy();
     renderBrandDemo();
   } else if (tab === 'variant') {
@@ -1552,26 +1568,37 @@ function renderBrandSubChart(canvasId, rows) {
   });
 }
 
-function renderBrandBreakdownCharts(rows) {
+function renderBrandBreakdownCharts() {
   Object.values(APP._breakdownCharts).forEach(function(c) { if (c) c.destroy(); });
   APP._breakdownCharts = {};
   var container = document.getElementById('brandBreakdownCharts');
   if (!container) return;
 
   var defs = buildFilterSectionDefs();
-  var visibleDefs = defs.filter(function(def) { return APP._visibleFilterSections.has(def.key); });
 
-  // Build groups: for each visible filter, collect sub-rows per value
+  // Only show breakdowns for filter sections that have at least one value checked
+  var activeDefs = defs.filter(function(def) {
+    if (def.key === 'qualities') return APP.f.qualities.length > 0;
+    if (def.key.startsWith('attr:')) {
+      var attr = def.key.slice(5);
+      return APP.f.attrs[attr] && APP.f.attrs[attr].length > 0;
+    }
+    return false;
+  });
+
+  // Build groups: use rows filtered by everything EXCEPT this attribute
+  // so all values of the dimension are visible for comparison
   var groups = [];
-  visibleDefs.forEach(function(def) {
+  activeDefs.forEach(function(def) {
+    var baseRows = filteredRowsExcept(def.key);
     var items = [];
     (def.items || []).forEach(function(val, j) {
       var subRows;
       if (def.key === 'qualities') {
-        subRows = rows.filter(function(r) { return r.quality === val; });
+        subRows = baseRows.filter(function(r) { return r.quality === val; });
       } else if (def.key.startsWith('attr:')) {
         var attr = def.key.slice(5);
-        subRows = rows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
+        subRows = baseRows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
       }
       if (subRows && subRows.length > 0) {
         var safeId = 'bbd_' + def.key.replace(/[^a-zA-Z0-9]/g,'_') + '_' + j;

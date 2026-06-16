@@ -1260,7 +1260,7 @@ function renderHeadlineStats(rows) {
   const brands  = unique(rows.filter(function(r) { return r.gt_brand; }).map(function(r) { return r.gt_brand; })).length;
   const groups  = unique(rows.filter(function(r) { return r.gt_group; }).map(function(r) { return r.gt_group; })).length;
   const classes = unique(rows.filter(function(r) { return r.gt_class; }).map(function(r) { return r.gt_class; })).length;
-  const skus    = unique(rows.filter(function(r) { return r.gt; }).map(function(r) { return r.gt.toLowerCase(); })).length;
+  const skus    = unique(rows.filter(function(r) { return r.gt_class; }).map(function(r) { return r.gt.toLowerCase(); })).length;
 
   const stats = [
     { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),     label:'Images' },

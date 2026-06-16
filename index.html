@@ -1,0 +1,2224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CV Accuracy Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:      #0a0f1e;
+    --card:    #111827;
+    --card2:   #1a2435;
+    --border:  #1f2937;
+    --blue:    #3b82f6;
+    --green:   #10b981;
+    --amber:   #f59e0b;
+    --red:     #ef4444;
+    --violet:  #8b5cf6;
+    --text:    #f1f5f9;
+    --muted:   #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui,-apple-system,sans-serif; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+  /* ── Upload zones ── */
+  .zone { border: 2px dashed var(--border); border-radius: 14px; padding: 32px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; }
+  .zone:hover, .zone.over { border-color: var(--blue); background: rgba(59,130,246,.05); }
+  .zone.staged { border-color: var(--green); background: rgba(16,185,129,.05); }
+
+  /* ── Buttons ── */
+  .btn { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:9px 18px; font-size:.85rem; font-weight:600; cursor:pointer; transition:all .18s; }
+  .btn-primary { background:var(--blue); color:#fff; }
+  .btn-primary:hover { background:#2563eb; transform:translateY(-1px); }
+  .btn-primary:disabled { background:#374151; color:#6b7280; cursor:not-allowed; transform:none; }
+  .btn-ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn-ghost:hover { border-color:var(--blue); color:var(--blue); }
+  .btn-sm { padding:5px 12px; font-size:.78rem; }
+
+  /* ── Inputs / selects ── */
+  input, select { background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 11px; font-size:.83rem; outline:none; transition:border-color .18s; }
+  input:focus, select:focus { border-color:var(--blue); }
+  input::placeholder { color:var(--muted); }
+  input[type=checkbox] { accent-color:var(--blue); width:14px; height:14px; }
+
+  /* ── Cards ── */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+
+  /* ── KPI badges ── */
+  .badge-g { background:rgba(16,185,129,.15); color:#10b981; border-radius:20px; padding:2px 9px; font-size:.72rem; font-weight:600; }
+  .badge-a { background:rgba(245,158,11,.15); color:#f59e0b; border-radius:20px; padding:2px 9px; font-size:.72rem; font-weight:600; }
+  .badge-r { background:rgba(239,68,68,.15); color:#ef4444; border-radius:20px; padding:2px 9px; font-size:.72rem; font-weight:600; }
+
+  /* ── Tables ── */
+  .tbl-wrap { overflow:auto; max-height:480px; border:1px solid var(--border); border-radius:8px; }
+  .tbl { width:100%; border-collapse:collapse; }
+  .tbl thead th {
+    position:sticky; top:0; z-index:20;
+    background:#192236; color:var(--muted);
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;
+    padding:9px 12px; white-space:nowrap; border-bottom:1px solid var(--border);
+    text-align:right;
+  }
+  .tbl thead th.left { text-align:left; }
+  .tbl tbody tr { border-bottom:1px solid rgba(31,41,55,.5); transition:background .12s; }
+  .tbl tbody tr:hover { background:rgba(59,130,246,.05); }
+  .tbl tbody td { padding:7px 12px; font-size:.79rem; white-space:nowrap; text-align:right; }
+  .tbl tbody td.left { text-align:left; }
+
+  /* Sticky first two columns */
+  .tbl .s1 { position:sticky; left:0; z-index:10; background:var(--card); }
+  .tbl .s2 { position:sticky; left:180px; z-index:10; background:var(--card); }
+  .tbl thead .s1, .tbl thead .s2 { background:#192236; z-index:30; }
+  .tbl tbody tr:hover .s1,
+  .tbl tbody tr:hover .s2 { background:#13203a; }
+
+  /* ── Progress bar ── */
+  .prog-wrap { background:var(--border); border-radius:3px; height:3px; overflow:hidden; width:240px; }
+  .prog-fill { height:100%; background:var(--blue); border-radius:3px; transition:width .3s; }
+
+  /* ── Spinner ── */
+  .spinner { width:36px; height:36px; border:3px solid rgba(59,130,246,.2); border-top-color:var(--blue); border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── Mapping modal ── */
+  #mappingModal { display:none; position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.8); backdrop-filter:blur(4px); align-items:center; justify-content:center; }
+  #mappingModal.show { display:flex; }
+  .modal-box { background:var(--card); border:1px solid var(--border); border-radius:16px; width:700px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; }
+
+  /* ── Filter sidebar ── */
+  .fsec { border-bottom:1px solid var(--border); padding:14px 0; }
+  .fsec-title { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .filter-list { display:flex; flex-direction:column; gap:7px; }
+  .filter-list.ms { background:var(--card2); border:1px solid var(--border); border-radius:7px; max-height:160px; overflow-y:auto; padding:8px 10px; }
+  .flabel { display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--muted); cursor:pointer; transition:color .15s; }
+  .flabel:hover { color:var(--text); }
+
+  /* ── Modal tabs ── */
+  .tab { padding:10px 16px; font-size:.83rem; font-weight:500; border-radius:6px 6px 0 0; cursor:pointer; color:var(--muted); transition:all .18s; border:none; background:transparent; }
+  .tab.active { background:var(--blue); color:#fff; }
+
+  /* ── Main content tabs ── */
+  .main-tab {
+    padding:9px 18px; font-size:.82rem; font-weight:500; cursor:pointer;
+    color:var(--muted); background:transparent; border:none;
+    border-bottom:2px solid transparent; transition:all .18s;
+    white-space:nowrap;
+  }
+  .main-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
+  .main-tab:hover:not(.active) { color:var(--text); }
+
+  /* ── Drill-down expanded content ── */
+  .drill-wrap { background:#060c1a; padding:12px 16px 14px 50px; border-bottom:2px solid rgba(245,158,11,.2); }
+  .drill-title { font-size:.67rem; text-transform:uppercase; letter-spacing:.06em; color:var(--amber); margin-bottom:9px; }
+
+  /* ── Image chips in drill-downs ── */
+  .img-chip {
+    display:inline-flex; align-items:center; gap:5px;
+    background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.2);
+    border-radius:7px; padding:4px 9px; font-size:.72rem; color:#93c5fd;
+    text-decoration:none; transition:background .15s; cursor:pointer;
+  }
+  .img-chip:hover { background:rgba(59,130,246,.25); }
+
+  /* ── Headline stat card ── */
+  .hstat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; }
+  .hstat-icon { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .hstat-num { font-size:1.9rem; font-weight:800; line-height:1; }
+  .hstat-label { font-size:.73rem; color:var(--muted); margin-top:3px; }
+
+  /* ── Warning ── */
+  .warn { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#f59e0b; border-radius:8px; padding:8px 14px; font-size:.78rem; display:flex; align-items:center; gap:8px; }
+
+  /* ── Empty state ── */
+  .empty { text-align:center; padding:48px 0; color:var(--muted); }
+  .empty i { font-size:2.2rem; margin-bottom:12px; display:block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     UPLOAD SCREEN
+══════════════════════════════════════════ -->
+<div id="uploadScreen" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
+  <div style="text-align:center;margin-bottom:48px;">
+    <div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:12px;">
+      <div style="width:44px;height:44px;background:rgba(59,130,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+        <i class="fas fa-chart-bar" style="color:var(--blue);font-size:1.1rem;"></i>
+      </div>
+      <h1 style="font-size:1.7rem;font-weight:800;color:#fff;">CV Accuracy Dashboard</h1>
+    </div>
+    <p style="color:var(--muted);max-width:480px;line-height:1.6;font-size:.9rem;">Upload your detection data, image quality mapping, and product masterdata to analyze computer vision model accuracy — all processing happens locally in your browser.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:900px;margin-bottom:32px;">
+
+    <!-- Detection -->
+    <div id="zone-det" class="zone" onclick="document.getElementById('inp-det').click()">
+      <input type="file" id="inp-det" accept=".xlsx,.xls,.csv" style="display:none" onchange="stageFile('det',this.files[0])">
+      <div style="width:56px;height:56px;background:rgba(59,130,246,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+        <i class="fas fa-table" style="color:var(--blue);font-size:1.4rem;"></i>
+      </div>
+      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Detection Data</div>
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Bounding box level AI predictions vs Ground Truth</div>
+      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div id="staged-det" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
+          <i class="fas fa-check-circle"></i>
+          <span id="fname-det" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        </span>
+        <button onclick="removeFile('det',event)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:2px 4px;">✕</button>
+      </div>
+    </div>
+
+    <!-- Image Quality -->
+    <div id="zone-iq" class="zone" onclick="document.getElementById('inp-iq').click()">
+      <input type="file" id="inp-iq" accept=".xlsx,.xls,.csv" style="display:none" onchange="stageFile('iq',this.files[0])">
+      <div style="width:56px;height:56px;background:rgba(16,185,129,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+        <i class="fas fa-image" style="color:var(--green);font-size:1.4rem;"></i>
+      </div>
+      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Image Quality</div>
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Maps session IDs to image quality tiers</div>
+      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div id="staged-iq" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
+          <i class="fas fa-check-circle"></i>
+          <span id="fname-iq" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        </span>
+        <button onclick="removeFile('iq',event)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:2px 4px;">✕</button>
+      </div>
+    </div>
+
+    <!-- Masterdata -->
+    <div id="zone-md" class="zone" onclick="document.getElementById('inp-md').click()">
+      <input type="file" id="inp-md" accept=".xlsx,.xls,.csv" style="display:none" onchange="stageFile('md',this.files[0])">
+      <div style="width:56px;height:56px;background:rgba(139,92,246,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+        <i class="fas fa-database" style="color:var(--violet);font-size:1.4rem;"></i>
+      </div>
+      <div style="font-weight:700;color:#fff;margin-bottom:6px;">Masterdata</div>
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Product catalog with brand, variant &amp; size attributes</div>
+      <div style="font-size:.72rem;color:#475569;">XLSX or CSV · Drag &amp; drop or click</div>
+      <div id="staged-md" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
+          <i class="fas fa-check-circle"></i>
+          <span id="fname-md" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        </span>
+        <button onclick="removeFile('md',event)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:2px 4px;">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model ID + Date inputs -->
+  <div style="display:flex;gap:16px;width:100%;max-width:900px;margin-bottom:20px;align-items:flex-start;">
+    <div style="flex:1;">
+      <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Model ID / Version</label>
+      <input type="text" id="inp-modelId" placeholder="e.g. v1.2, YOLOv8-epoch-50, Model-3…" style="width:100%;">
+      <div style="font-size:.7rem;color:#374151;margin-top:4px;">Tag this run to track accuracy trends over time</div>
+    </div>
+    <div style="flex:0 0 auto;">
+      <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Run Date</label>
+      <input type="date" id="inp-runDate" style="width:190px;">
+      <div style="font-size:.7rem;color:#374151;margin-top:4px;">Defaults to today</div>
+    </div>
+  </div>
+
+  <button id="processBtn" class="btn btn-primary" style="padding:12px 36px;font-size:.95rem;" disabled onclick="openMappingModal()">
+    <i class="fas fa-cogs"></i> Process Data
+  </button>
+  <p style="font-size:.73rem;color:#374151;margin-top:12px;">No data leaves your device. All computation runs in-browser.</p>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     COLUMN MAPPING MODAL
+══════════════════════════════════════════ -->
+<div id="mappingModal">
+  <div class="modal-box">
+    <div style="padding:22px 24px;border-bottom:1px solid var(--border);">
+      <div style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:4px;">Column Mapping</div>
+      <div style="font-size:.82rem;color:var(--muted);">Verify that the detected column mappings are correct for each file before processing.</div>
+    </div>
+    <div style="display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);">
+      <button class="tab active" id="tab-det" onclick="switchTab('det')"><i class="fas fa-table" style="margin-right:6px;"></i>Detection Data</button>
+      <button class="tab" id="tab-iq" onclick="switchTab('iq')" style="color:var(--muted);"><i class="fas fa-image" style="margin-right:6px;"></i>Image Quality</button>
+      <button class="tab" id="tab-md" onclick="switchTab('md')" style="color:var(--muted);"><i class="fas fa-database" style="margin-right:6px;"></i>Masterdata</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:20px 24px;">
+      <div id="tc-det"></div>
+      <div id="tc-iq" style="display:none;"></div>
+      <div id="tc-md" style="display:none;"></div>
+    </div>
+    <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <button class="btn btn-ghost" onclick="closeMappingModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmProcess()">
+        <i class="fas fa-play"></i> Confirm &amp; Process
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     PROCESSING OVERLAY
+══════════════════════════════════════════ -->
+<div id="procOverlay" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(10,15,30,.96);flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div class="spinner"></div>
+  <div id="procMsg" style="font-size:1rem;color:#cbd5e1;font-weight:500;">Processing...</div>
+  <div class="prog-wrap"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD
+══════════════════════════════════════════ -->
+<div id="dashboard" style="display:none;height:100vh;flex-direction:column;">
+
+  <!-- Top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <i class="fas fa-chart-bar" style="color:var(--blue);font-size:1rem;"></i>
+      <span style="font-weight:800;font-size:1rem;color:#fff;">CV Accuracy Dashboard</span>
+    </div>
+    <div id="topStats" style="display:flex;gap:20px;font-size:.75rem;color:var(--muted);"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="qualWarn" style="display:none;" class="warn"><i class="fas fa-exclamation-triangle"></i>Quality file: 0 sessions matched — verify session ID column mapping.</div>
+      <button class="btn btn-ghost btn-sm" onclick="resetAll()"><i class="fas fa-upload"></i> Re-upload</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div style="display:flex;flex:1;overflow:hidden;">
+
+    <!-- Sidebar -->
+    <div style="width:260px;flex-shrink:0;overflow-y:auto;background:#0d1424;border-right:1px solid var(--border);padding:14px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Filters</span>
+        <button onclick="resetFilters()" style="font-size:.72rem;color:var(--blue);background:none;border:none;cursor:pointer;">Reset All</button>
+      </div>
+      <div id="filtersBox"></div>
+    </div>
+
+    <!-- Main -->
+    <div style="flex:1;overflow-y:auto;padding:20px;">
+
+      <!-- Headline stats (always visible) -->
+      <div id="headlineStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;"></div>
+
+      <!-- KPI cards (4, always visible) -->
+      <div id="kpiRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;"></div>
+
+      <!-- Main tab bar -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;">
+        <button class="main-tab active" id="mtab-overview"  onclick="switchMainTab('overview')"><i class="fas fa-chart-line" style="margin-right:6px;"></i>Overview</button>
+        <button class="main-tab"        id="mtab-brand"     onclick="switchMainTab('brand')"><i class="fas fa-tag" style="margin-right:6px;"></i>Brand Analysis</button>
+        <button class="main-tab"        id="mtab-variant"   onclick="switchMainTab('variant')"><i class="fas fa-box" style="margin-right:6px;"></i>Variant Analysis</button>
+        <button class="main-tab"        id="mtab-sku"       onclick="switchMainTab('sku')"><i class="fas fa-microscope" style="margin-right:6px;"></i>SKU Analysis</button>
+        <button class="main-tab"        id="mtab-brandDemo" onclick="switchMainTab('brandDemo')"><i class="fas fa-list-check" style="margin-right:6px;"></i>Brand Demo</button>
+        <button class="main-tab"        id="mtab-sizeDemo"  onclick="switchMainTab('sizeDemo')"><i class="fas fa-ruler-combined" style="margin-right:6px;"></i>Size Demo</button>
+        <button class="main-tab"        id="mtab-trends"    onclick="switchMainTab('trends')"><i class="fas fa-chart-line" style="margin-right:6px;"></i>Trends</button>
+      </div>
+
+      <!-- Tab: Overview -->
+      <div id="tcontent-overview">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="card">
+            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-layer-group" style="color:var(--blue);"></i>Accuracy by Image Quality
+            </div>
+            <div style="height:210px;"><canvas id="chart1"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-tags" style="color:var(--violet);"></i>Brand vs Variant vs SKU Accuracy (Top 10)
+            </div>
+            <div style="height:210px;"><canvas id="chart2"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Brand Analysis -->
+      <div id="tcontent-brand" style="display:none;">
+        <div class="card" style="margin-bottom:16px;">
+          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy (Top 15 by Volume)
+          </div>
+          <div style="height:320px;"><canvas id="chart3"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy
+            <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(GT level — click row to drill down)</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:420px;">
+            <table class="tbl"><thead id="baHead"></thead><tbody id="baBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Variant Analysis -->
+      <div id="tcontent-variant" style="display:none;">
+        <div class="card" style="margin-bottom:16px;">
+          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy (Top 15 by Volume)
+          </div>
+          <div style="height:320px;"><canvas id="chart4"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy
+            <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Brand + Pack Type — click row to drill down)</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:420px;">
+            <table class="tbl"><thead id="vaHead"></thead><tbody id="vaBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: SKU Analysis -->
+      <div id="tcontent-sku" style="display:none;">
+        <div class="card">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-microscope" style="color:var(--amber);"></i>SKU Accuracy
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(QC Display Name — click row to drill down)</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Sorted by most errors first. Expand a row to see misclassification breakdown and affected images.</div>
+            </div>
+            <input type="search" id="skuSearch" placeholder="Search SKU or brand…" style="width:210px;" oninput="APP._skuQ=this.value;renderSkuAccuracy()">
+          </div>
+          <div class="tbl-wrap" style="max-height:600px;">
+            <table class="tbl"><thead id="skuHead"></thead><tbody id="skuBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Brand Demo -->
+      <div id="tcontent-brandDemo" style="display:none;">
+        <div class="card">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-list-check" style="color:var(--green);"></i>Brand Demonstration Sheet
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level — Top 15 competitor brands)</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Classification breakdown per image for self-brand bounding boxes</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="search" id="bdSearch" placeholder="Search session ID…" style="width:190px;" oninput="APP.pg.bd.page=1;APP.pg.bd.q=this.value;renderBrandDemo()">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV('bd')"><i class="fas fa-download"></i> Export</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead id="bdHead"></thead><tbody id="bdBody"></tbody></table></div>
+          <div id="bdPag" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted);"></div>
+        </div>
+      </div>
+
+      <!-- Tab: Size Demo -->
+      <div id="tcontent-sizeDemo" style="display:none;">
+        <div class="card">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-ruler-combined" style="color:var(--amber);"></i>Size Demonstration Sheet
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level)</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Correct brand, wrong SKU size — per image breakdown</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="search" id="sdSearch" placeholder="Search session ID…" style="width:190px;" oninput="APP.pg.sd.page=1;APP.pg.sd.q=this.value;renderSizeDemo()">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV('sd')"><i class="fas fa-download"></i> Export</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead id="sdHead"></thead><tbody id="sdBody"></tbody></table></div>
+          <div id="sdPag" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted);"></div>
+        </div>
+      </div>
+
+      <!-- Tab: Trends -->
+      <div id="tcontent-trends" style="display:none;">
+
+        <!-- Run history table -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-history" style="color:var(--blue);"></i>Model Run History
+              <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(stored in browser · survives page refresh)</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="clearHistory()" style="color:var(--red);border-color:rgba(239,68,68,.3);">
+              <i class="fas fa-trash"></i> Clear All
+            </button>
+          </div>
+          <div id="trendsHistoryTable"></div>
+        </div>
+
+        <!-- Overall KPI trend -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-chart-line" style="color:var(--blue);"></i>Overall KPI Trends (Accuracy / Precision / Recall / F1)
+          </div>
+          <div style="height:260px;"><canvas id="chart5"></canvas></div>
+        </div>
+
+        <!-- Brand accuracy trend -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
+            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-tag" style="color:var(--green);"></i>Brand Accuracy Trends
+            </div>
+            <div id="brandTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
+          </div>
+          <div style="height:260px;"><canvas id="chart6"></canvas></div>
+        </div>
+
+        <!-- Variant accuracy trend -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
+            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy Trends
+            </div>
+            <div id="variantTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
+          </div>
+          <div style="height:260px;"><canvas id="chart7"></canvas></div>
+        </div>
+
+        <!-- SKU accuracy trend -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px;">
+            <div style="font-size:.82rem;font-weight:600;color:#cbd5e1;white-space:nowrap;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-microscope" style="color:var(--amber);"></i>SKU Accuracy Trends (Top Error SKUs)
+            </div>
+            <div id="skuTrendSelector" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;"></div>
+          </div>
+          <div style="height:260px;"><canvas id="chart8"></canvas></div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════
+const APP = {
+  files: { det: null, iq: null, md: null },
+  raw:   { det: null, iq: null, md: null },
+  cfg: {
+    det: { sheet: 'Raw',    cols: {} },
+    iq:  { sheet: '_data_', cols: {} },
+    md:  { sheet: '_data_', cols: {} }
+  },
+  d: {
+    rows: [],
+    qMap: new Map(),
+    mMap: {},
+    brands: [],
+    qualities: [],
+    variants: [],
+    measures: [],
+    subcats: []
+  },
+  f: { qualities:[], brands:[], variants:[], measures:[] },
+  pg: {
+    bd: { page:1, size:25, q:'', rows:[] },
+    sd: { page:1, size:25, q:'', rows:[] }
+  },
+  tabs: { main: 'overview' },
+  charts: { c1:null, c2:null, c3:null, c4:null, c5:null, c6:null, c7:null, c8:null },
+  _sdBrands: [],
+  _skuExpanded: new Set(),
+  _skuQ: '',
+  _pivotSku: [],
+  _trendBrands: [],
+  _trendVariants: [],
+  _trendSkus: [],
+  _brandExpanded: new Set(),
+  _variantExpanded: new Set(),
+  _pivotBrand: [],
+  _pivotVariant: []
+};
+
+// ═══════════════════════════════════════════════════════════
+// UPLOAD SCREEN
+// ═══════════════════════════════════════════════════════════
+
+function stageFile(key, file) {
+  if (!file) return;
+  APP.files[key] = file;
+  const el = document.getElementById('staged-' + key);
+  el.style.display = 'flex';
+  document.getElementById('fname-' + key).textContent = file.name;
+  document.getElementById('zone-' + key).classList.add('staged');
+  checkAllStaged();
+}
+
+function removeFile(key, e) {
+  e.stopPropagation();
+  APP.files[key] = null;
+  APP.raw[key] = null;
+  document.getElementById('staged-' + key).style.display = 'none';
+  document.getElementById('zone-' + key).classList.remove('staged');
+  document.getElementById('inp-' + key).value = '';
+  checkAllStaged();
+}
+
+function checkAllStaged() {
+  const ok = APP.files.det && APP.files.iq && APP.files.md;
+  document.getElementById('processBtn').disabled = !ok;
+}
+
+['det','iq','md'].forEach(function(k) {
+  const z = document.getElementById('zone-' + k);
+  z.addEventListener('dragover', function(e) { e.preventDefault(); z.classList.add('over'); });
+  z.addEventListener('dragleave', function() { z.classList.remove('over'); });
+  z.addEventListener('drop', function(e) {
+    e.preventDefault();
+    z.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f) stageFile(k, f);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// FILE PARSING
+// ═══════════════════════════════════════════════════════════
+
+function parseXLSX(file) {
+  return new Promise(function(res, rej) {
+    const fr = new FileReader();
+    fr.onload = function(ev) {
+      try {
+        const wb = XLSX.read(ev.target.result, { type:'array', raw:false });
+        const out = { sheets: wb.SheetNames, data: {} };
+        wb.SheetNames.forEach(function(name) {
+          out.data[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval:'', raw:false });
+        });
+        res(out);
+      } catch(err) { rej(err); }
+    };
+    fr.onerror = rej;
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+function parseCSV(file) {
+  return new Promise(function(res, rej) {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: function(h) { return h.replace(/^﻿/, '').trim(); },
+      complete: res,
+      error: rej
+    });
+  });
+}
+
+async function parseFileAuto(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    const result = await parseCSV(file);
+    return { isXLSX: false, sheets: ['_data_'], activeSheet: '_data_', data: { '_data_': result.data || [] } };
+  } else {
+    const wb = await parseXLSX(file);
+    const active = wb.sheets[0] || '_data_';
+    return { isXLSX: true, sheets: wb.sheets, activeSheet: active, data: wb.data };
+  }
+}
+
+function getActiveRows(key) {
+  const parsed = APP.raw[key];
+  if (!parsed) return [];
+  const sheet = APP.cfg[key] && APP.cfg[key].sheet ? APP.cfg[key].sheet : (parsed.activeSheet || '_data_');
+  return parsed.data[sheet] || [];
+}
+
+function normalizeQuality(q) {
+  if (!q) return '';
+  const s = q.toLowerCase().trim();
+  if (s.startsWith('good'))                        return 'Good';
+  if (s.startsWith('average') || s.includes('avg')) return 'Average';
+  if (s.startsWith('poor'))                        return 'Poor';
+  if (s.includes('blank') || s.includes('empty'))  return 'Blank';
+  if (s.includes('blurred') || s.includes('blur')) return 'Blurred';
+  if (s.startsWith('impossible'))                  return 'Impossible';
+  return q;
+}
+
+// ═══════════════════════════════════════════════════════════
+// COLUMN MAPPING MODAL
+// ═══════════════════════════════════════════════════════════
+
+const COL_DEFS = {
+  det: [
+    { key:'session_id',     label:'Session / Image ID',        req:true,  cands:['session_id','image_id','cooler_session_id','test_image_id','sessionid'] },
+    { key:'qc_dn',          label:'GT — QC Display Name',      req:true,  cands:['qc_display name','qc display name','qc_display_name','ground_truth','gt'] },
+    { key:'dn',             label:'Prediction — Display Name', req:true,  cands:['display name','display_name','prediction','pred','ai_display_name'] },
+    { key:'competition',    label:'Competition Flag',           req:true,  cands:['competition','competition_flag','comp'] },
+    { key:'file_path',      label:'Image URL (file_path)',     req:false, cands:['file_path','filepath','image_url','url'] },
+    { key:'quality',        label:'Embedded Quality (fallback)',req:false, cands:['quality','image quality','image_quality'] }
+  ],
+  iq: [
+    { key:'session_id', label:'Session ID',    req:true, cands:['cooler_session_id','session_id','image_id','sessionid'] },
+    { key:'quality',    label:'Image Quality', req:true, cands:['image quality','image_quality','quality'] }
+  ],
+  md: [
+    { key:'class_name',  label:'Class Name',      req:true,  cands:['class_name','classname','class'] },
+    { key:'attr_name',   label:'Attribute Name',  req:true,  cands:['attribute_name','attr_name','attribute'] },
+    { key:'attr_value',  label:'Attribute Value', req:true,  cands:['attribute_value','attr_value','value'] },
+    { key:'competition', label:'Competition Flag', req:false, cands:['competition','competition_type'] }
+  ]
+};
+
+function bestMatch(headers, cands) {
+  const lower = headers.map(function(h) { return (h||'').toLowerCase().trim(); });
+  for (const c of cands) {
+    const i = lower.indexOf(c.toLowerCase());
+    if (i !== -1) return headers[i];
+  }
+  for (const c of cands) {
+    const i = lower.findIndex(function(h) { return h.includes(c.toLowerCase()); });
+    if (i !== -1) return headers[i];
+  }
+  return '';
+}
+
+function samples(rows, col) {
+  if (!col || !rows.length) return '';
+  const vals = rows.slice(0,8).map(function(r) { return r[col]; }).filter(function(v) { return v !== undefined && v !== null && v !== ''; }).slice(0,3);
+  return vals.length ? vals.map(function(v) { return '<code style="background:#0a1929;color:#93c5fd;padding:1px 5px;border-radius:4px;font-size:.72rem;">' + String(v).substring(0,30) + '</code>'; }).join(' ') : '';
+}
+
+function buildTabHTML(key, rows, headers) {
+  const defs = COL_DEFS[key];
+  let html = '';
+
+  if (APP.raw[key] && APP.raw[key].isXLSX) {
+    const sheets = APP.raw[key].sheets;
+    const cur    = (APP.cfg[key] && APP.cfg[key].sheet) ? APP.cfg[key].sheet : sheets[0];
+    html += '<div style="margin-bottom:18px;padding:14px;background:var(--card2);border-radius:8px;">' +
+      '<label style="font-size:.73rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:block;margin-bottom:6px;">Select Sheet</label>' +
+      '<select id="sheetSel-' + key + '" style="width:100%;" onchange="onSheetChange(\'' + key + '\',this.value)">' +
+      sheets.map(function(s) { return '<option value="' + s + '"' + (s === cur ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
+      '</select></div>';
+  }
+
+  defs.forEach(function(def) {
+    const detected = bestMatch(headers, def.cands);
+    const smp = samples(rows, detected);
+    html += '<div style="margin-bottom:14px;padding:14px;background:var(--card2);border-radius:8px;">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">' +
+      '<label style="font-size:.83rem;font-weight:600;color:#f1f5f9;">' +
+      def.label + (def.req ? ' <span style="color:#f87171;">*</span>' : ' <span style="font-size:.72rem;color:var(--muted);">(opt)</span>') +
+      '</label>' +
+      '<div style="font-size:.72rem;max-width:220px;text-align:right;">' + smp + '</div>' +
+      '</div>' +
+      '<select id="cm-' + key + '-' + def.key + '" style="width:100%;">' +
+      '<option value="">— not mapped —</option>' +
+      headers.map(function(h) { return '<option value="' + h + '"' + (h === detected ? ' selected' : '') + '>' + h + '</option>'; }).join('') +
+      '</select></div>';
+  });
+  return html;
+}
+
+function onSheetChange(key, sheet) {
+  APP.cfg[key].sheet = sheet;
+  const rows = APP.raw[key].data[sheet] || [];
+  const hdrs = rows.length ? Object.keys(rows[0]) : [];
+  document.getElementById('tc-' + key).innerHTML = buildTabHTML(key, rows, hdrs);
+}
+
+function switchTab(key) {
+  ['det','iq','md'].forEach(function(k) {
+    document.getElementById('tab-' + k).classList.toggle('active', k === key);
+    document.getElementById('tab-' + k).style.color = k === key ? '' : 'var(--muted)';
+    document.getElementById('tc-' + k).style.display = k === key ? '' : 'none';
+  });
+}
+
+async function openMappingModal() {
+  showOverlay('Reading files…', 5);
+  try {
+    APP.raw.det = await parseFileAuto(APP.files.det);
+    showOverlay('Parsing quality file…', 40);
+    APP.raw.iq  = await parseFileAuto(APP.files.iq);
+    showOverlay('Parsing masterdata…', 70);
+    APP.raw.md  = await parseFileAuto(APP.files.md);
+  } catch(e) {
+    hideOverlay();
+    alert('Error reading files: ' + e.message);
+    return;
+  }
+  hideOverlay();
+
+  APP.cfg.det.sheet = APP.raw.det.sheets.includes('Raw') ? 'Raw' : APP.raw.det.activeSheet;
+  APP.cfg.iq.sheet  = APP.raw.iq.activeSheet;
+  APP.cfg.md.sheet  = APP.raw.md.activeSheet;
+
+  const detRows = getActiveRows('det');
+  const detHdrs = detRows.length ? Object.keys(detRows[0]) : [];
+  document.getElementById('tc-det').innerHTML = buildTabHTML('det', detRows, detHdrs);
+
+  const iqRows = getActiveRows('iq');
+  const iqHdrs = iqRows.length ? Object.keys(iqRows[0]) : [];
+  document.getElementById('tc-iq').innerHTML = buildTabHTML('iq', iqRows, iqHdrs);
+
+  const mdRows = getActiveRows('md');
+  const mdHdrs = mdRows.length ? Object.keys(mdRows[0]) : [];
+  document.getElementById('tc-md').innerHTML = buildTabHTML('md', mdRows, mdHdrs);
+
+  switchTab('det');
+  document.getElementById('mappingModal').classList.add('show');
+}
+
+function closeMappingModal() {
+  document.getElementById('mappingModal').classList.remove('show');
+}
+
+function getColMap(key) {
+  const out = {};
+  COL_DEFS[key].forEach(function(def) {
+    const el = document.getElementById('cm-' + key + '-' + def.key);
+    out[def.key] = el ? el.value : '';
+  });
+  return out;
+}
+
+async function confirmProcess() {
+  APP.cfg.det.cols = getColMap('det');
+  APP.cfg.iq.cols  = getColMap('iq');
+  APP.cfg.md.cols  = getColMap('md');
+
+  const missing = [
+    ...COL_DEFS.det.filter(function(d) { return d.req && !APP.cfg.det.cols[d.key]; }).map(function(d) { return d.label; }),
+    ...COL_DEFS.iq.filter(function(d)  { return d.req && !APP.cfg.iq.cols[d.key]; }).map(function(d) { return d.label; }),
+    ...COL_DEFS.md.filter(function(d)  { return d.req && !APP.cfg.md.cols[d.key]; }).map(function(d) { return d.label; })
+  ];
+  if (missing.length) { alert('Required columns not mapped:\n• ' + missing.join('\n• ')); return; }
+
+  closeMappingModal();
+  await processData();
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERLAY HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function showOverlay(msg, pct) {
+  const el = document.getElementById('procOverlay');
+  el.style.display = 'flex';
+  document.getElementById('procMsg').textContent = msg;
+  document.getElementById('progFill').style.width = (pct||0) + '%';
+}
+
+function hideOverlay() {
+  document.getElementById('procOverlay').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA PROCESSING PIPELINE
+// ═══════════════════════════════════════════════════════════
+
+const cl = function(v) { return (v === null || v === undefined) ? '' : String(v).trim(); };
+
+function buildMasterdataMap(rows, cols) {
+  const byClass = {};
+  for (const row of rows) {
+    const cname = cl(row[cols.class_name]);
+    const aname = cl(row[cols.attr_name]);
+    const aval  = cl(row[cols.attr_value]);
+    const comp  = cl(row[cols.competition] || '');
+    if (!cname) continue;
+    if (!byClass[cname]) byClass[cname] = { competition: comp };
+    else if (comp) byClass[cname].competition = comp;
+    if (aname) byClass[cname][aname] = aval;
+  }
+
+  const map = {};
+  for (const [, attrs] of Object.entries(byClass)) {
+    const dn = cl(attrs['Display Name'] || attrs['display_name'] || attrs['display name'] || '');
+    if (!dn) continue;
+    const key = dn.toLowerCase();
+    map[key] = {
+      brand:    cl(attrs['Brand'] || ''),
+      variant:  cl(attrs['Pack type'] || attrs['Variant'] || ''),
+      measure:  parseInt(cl(attrs['measure'] || '0')) || 0,
+      subcat:   cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
+      competition: cl(attrs.competition || '')
+    };
+  }
+  return map;
+}
+
+function buildQualityMap(rows, cols) {
+  const m = new Map();
+  for (const row of rows) {
+    const sid = cl(row[cols.session_id]);
+    const q   = normalizeQuality(cl(row[cols.quality]));
+    if (sid) m.set(sid, q || 'Unknown');
+  }
+  return m;
+}
+
+function enrichRows(detRows, qMap, mMap, cols) {
+  const out = [];
+  for (const row of detRows) {
+    const sid   = cl(row[cols.session_id]);
+    const gt    = cl(row[cols.qc_dn]);
+    const pred  = cl(row[cols.dn]);
+    const comp  = cl(row[cols.competition]);
+    const fp    = cols.file_path ? cl(row[cols.file_path]) : '';
+
+    if (!gt && !pred) continue;
+
+    const embQual = cols.quality ? normalizeQuality(cl(row[cols.quality])) : '';
+    const quality = qMap.get(sid) || embQual || 'Unknown';
+    const is_correct = gt !== '' && gt === pred;
+
+    const gta = mMap[gt.toLowerCase()]   || { brand:'', variant:'', measure:0, subcat:'', competition:'' };
+    const pra = mMap[pred.toLowerCase()] || { brand:'', variant:'', measure:0, subcat:'', competition:comp };
+
+    out.push({
+      sid, gt, pred, comp, fp, quality, is_correct,
+      gt_brand:   gta.brand,
+      gt_variant: gta.variant,
+      gt_measure: gta.measure,
+      gt_comp:    gta.competition || (comp === 'self' ? '' : ''),
+      pred_brand:   pra.brand,
+      pred_variant: pra.variant,
+      pred_measure: pra.measure
+    });
+  }
+  return out;
+}
+
+async function processData() {
+  APP.d.modelId = (document.getElementById('inp-modelId').value || '').trim() || ('Run-' + (getHistory().length + 1));
+  APP.d.date    = document.getElementById('inp-runDate').value || new Date().toISOString().split('T')[0];
+
+  showOverlay('Building masterdata map…', 10);
+  await tick();
+
+  APP.d.mMap = buildMasterdataMap(getActiveRows('md'), APP.cfg.md.cols);
+  showOverlay('Building quality map…', 25); await tick();
+
+  APP.d.qMap = buildQualityMap(getActiveRows('iq'), APP.cfg.iq.cols);
+  showOverlay('Enriching detection rows…', 40); await tick();
+
+  APP.d.rows = enrichRows(
+    getActiveRows('det'),
+    APP.d.qMap, APP.d.mMap, APP.cfg.det.cols
+  );
+  showOverlay('Computing unique filter values…', 65); await tick();
+
+  APP.d.qualities = unique(APP.d.rows.map(function(r) { return r.quality; })).sort();
+  APP.d.brands    = unique(
+    Object.values(APP.d.mMap)
+      .map(function(v) { return v.brand; })
+      .filter(function(b) { return b && b !== '#N/A' && b.toLowerCase() !== 'others' && b.toLowerCase() !== 'non-nartd'; })
+  ).sort();
+  APP.d.variants  = unique(Object.values(APP.d.mMap).map(function(v) { return v.variant; }).filter(Boolean)).sort();
+  APP.d.measures  = unique(Object.values(APP.d.mMap).map(function(v) { return v.measure; }).filter(function(m) { return m > 0; })).sort(function(a,b) { return a-b; });
+  APP.d.subcats   = unique(Object.values(APP.d.mMap).map(function(v) { return v.subcat; }).filter(Boolean)).sort();
+
+  const matched = APP.d.rows.filter(function(r) { return r.quality !== 'Unknown'; }).length;
+  document.getElementById('qualWarn').style.display = (matched === 0 && APP.d.rows.length > 0) ? 'flex' : 'none';
+
+  const imgs = unique(APP.d.rows.map(function(r) { return r.sid; })).length;
+  document.getElementById('topStats').innerHTML =
+    '<span><i class="fas fa-code-branch" style="color:var(--amber);margin-right:4px;"></i>' + APP.d.modelId + '</span>' +
+    '<span><i class="fas fa-calendar" style="color:var(--blue);margin-right:4px;"></i>' + APP.d.date + '</span>' +
+    '<span><i class="fas fa-images" style="color:var(--green);margin-right:4px;"></i>' + imgs.toLocaleString() + ' images</span>' +
+    '<span><i class="fas fa-check-circle" style="color:var(--violet);margin-right:4px;"></i>' + matched.toLocaleString() + ' quality-matched</span>';
+
+  showOverlay('Rendering…', 85); await tick();
+
+  APP.f = { qualities:[], brands:[], variants:[], measures:[] };
+  APP.pg = {
+    bd: { page:1, size:25, q:'', rows:[] },
+    sd: { page:1, size:25, q:'', rows:[] }
+  };
+  APP.tabs = { main: 'overview' };
+  APP._skuExpanded = new Set();
+  APP._skuQ = '';
+  APP._pivotSku = [];
+  APP._brandExpanded = new Set();
+  APP._variantExpanded = new Set();
+  APP._pivotBrand = [];
+  APP._pivotVariant = [];
+  APP._trendBrands = [];
+  APP._trendVariants = [];
+  APP._trendSkus = [];
+
+  const skuSearchEl = document.getElementById('skuSearch');
+  if (skuSearchEl) skuSearchEl.value = '';
+
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'flex';
+
+  renderAll();
+  switchMainTab('overview');
+  saveSnapshot();
+  hideOverlay();
+}
+
+const tick = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
+const unique = function(arr) { return [...new Set(arr.filter(function(v) { return v !== null && v !== undefined && v !== ''; }))]; };
+
+// ═══════════════════════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════════════════════
+
+function filteredRows() {
+  const f = APP.f;
+  return APP.d.rows.filter(function(r) {
+    if (f.qualities.length && !f.qualities.includes(r.quality)) return false;
+    if (f.brands.length   && !f.brands.includes(r.gt_brand))   return false;
+    if (f.variants.length && !f.variants.includes(r.gt_variant)) return false;
+    if (f.measures.length && !f.measures.includes(r.gt_measure)) return false;
+    return true;
+  });
+}
+
+function renderFilters() {
+  const box = document.getElementById('filtersBox');
+  box.innerHTML =
+    filterSection('qualities', 'fa-star',   'var(--blue)',   'Image Quality',       APP.d.qualities, false) +
+    filterSection('variants',  'fa-box',    'var(--violet)', 'Variant / Pack Type', APP.d.variants,  false) +
+    filterSection('brands',    'fa-tag',    'var(--green)',  'GT Brand',            APP.d.brands,    true) +
+    filterSection('measures',  'fa-ruler',  'var(--amber)',  'SKU Size (ml)',       APP.d.measures,  true);
+}
+
+function filterSection(key, icon, color, label, items, searchable) {
+  const chkboxes = items.map(function(item) {
+    const checked = APP.f[key].includes(item) ? 'checked' : '';
+    const val = typeof item === 'number' ? item : ("'" + String(item).replace(/'/g, "\\'") + "'");
+    return '<label class="flabel">' +
+      '<input type="checkbox" value="' + item + '" ' + checked + ' onchange="toggleFilter(\'' + key + '\',' + val + ',this.checked)">' +
+      '<span>' + item + '</span></label>';
+  }).join('');
+
+  return '<div class="fsec">' +
+    '<div class="fsec-title">' +
+    '<span><i class="fas ' + icon + '" style="color:' + color + ';margin-right:7px;"></i>' + label + '</span>' +
+    '<i class="fas fa-chevron-down" style="font-size:.65rem;"></i>' +
+    '</div>' +
+    (searchable ? '<input type="search" placeholder="Search…" style="width:100%;margin-bottom:8px;padding:5px 9px;font-size:.76rem;" oninput="filterSearch(this,\'fs-list-' + key + '\')">' : '') +
+    '<div class="filter-list ' + (searchable ? 'ms' : '') + '" id="fs-list-' + key + '">' + chkboxes + '</div>' +
+    '</div>';
+}
+
+function filterSearch(inp, listId) {
+  const q = inp.value.toLowerCase();
+  document.querySelectorAll('#' + listId + ' .flabel').forEach(function(el) {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function toggleFilter(key, value, checked) {
+  const arr = APP.f[key];
+  if (checked) { if (!arr.includes(value)) arr.push(value); }
+  else { const i = arr.indexOf(value); if (i !== -1) arr.splice(i, 1); }
+  APP.pg.bd.page = 1;
+  APP.pg.sd.page = 1;
+  renderAll();
+}
+
+function resetFilters() {
+  APP.f = { qualities:[], brands:[], variants:[], measures:[] };
+  APP.pg.bd.page = 1;
+  APP.pg.sd.page = 1;
+  APP._skuExpanded = new Set();
+  APP._brandExpanded = new Set();
+  APP._variantExpanded = new Set();
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════
+// METRICS
+// ═══════════════════════════════════════════════════════════
+
+function computeMetrics(rows) {
+  if (!rows.length) return { total:0, correct:0, acc:0, p:0, r:0, f1:0 };
+
+  const stats = {};
+  let correct = 0;
+
+  for (const row of rows) {
+    const { gt, pred, is_correct } = row;
+    if (!stats[gt])   stats[gt]   = { TP:0, gtN:0, predN:0 };
+    if (!stats[pred]) stats[pred] = { TP:0, gtN:0, predN:0 };
+    stats[gt].gtN++;
+    stats[pred].predN++;
+    if (is_correct) { stats[gt].TP++; correct++; }
+  }
+
+  let sumP = 0, nP = 0, sumR = 0, nR = 0;
+  for (const s of Object.values(stats)) {
+    if (s.predN > 0) { sumP += s.TP / s.predN; nP++; }
+    if (s.gtN   > 0) { sumR += s.TP / s.gtN;   nR++; }
+  }
+
+  const p   = nP > 0 ? sumP / nP : 0;
+  const r   = nR > 0 ? sumR / nR : 0;
+  const f1  = (p + r) > 0 ? 2 * p * r / (p + r) : 0;
+  const acc = rows.length > 0 ? correct / rows.length : 0;
+
+  return { total: rows.length, correct, acc, p, r, f1 };
+}
+
+// ═══════════════════════════════════════════════════════════
+// KPI + HEADLINE RENDERING
+// ═══════════════════════════════════════════════════════════
+
+function kpiColor(v) {
+  if (v >= .90) return 'var(--green)';
+  if (v >= .75) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function kpiBadge(v) {
+  if (v >= .90) return '<span class="badge-g">Good</span>';
+  if (v >= .75) return '<span class="badge-a">Fair</span>';
+  return '<span class="badge-r">Poor</span>';
+}
+
+const pct = function(v) { return (v * 100).toFixed(1) + '%'; };
+
+function renderHeadlineStats(rows) {
+  const imgs     = unique(rows.map(function(r) { return r.sid; })).length;
+  const brands   = unique(rows.filter(function(r) { return r.gt_brand; }).map(function(r) { return r.gt_brand; })).length;
+  const variants = unique(rows.filter(function(r) { return r.gt_variant; }).map(function(r) { return r.gt_variant; })).length;
+  const groups   = unique(rows.map(function(r) {
+    const m = APP.d.mMap[r.gt.toLowerCase()];
+    return m ? m.subcat : null;
+  }).filter(Boolean)).length;
+
+  const stats = [
+    { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),      label:'Images' },
+    { icon:'fa-tag',         color:'var(--green)',  bg:'rgba(16,185,129,.12)',  num:brands.toLocaleString(),    label:'Unique Brands' },
+    { icon:'fa-box',         color:'var(--violet)', bg:'rgba(139,92,246,.12)', num:variants.toLocaleString(),  label:'Unique Variants' },
+    { icon:'fa-layer-group', color:'var(--amber)',  bg:'rgba(245,158,11,.12)', num:groups.toLocaleString(),    label:'Unique Groups' }
+  ];
+  document.getElementById('headlineStats').innerHTML = stats.map(function(s) {
+    return '<div class="hstat">' +
+      '<div class="hstat-icon" style="background:' + s.bg + ';">' +
+      '<i class="fas ' + s.icon + '" style="color:' + s.color + ';font-size:1.1rem;"></i>' +
+      '</div>' +
+      '<div>' +
+      '<div class="hstat-num" style="color:' + s.color + ';">' + s.num + '</div>' +
+      '<div class="hstat-label">' + s.label + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function renderKPIs(m) {
+  const cards = [
+    { label:'Object Accuracy', val: pct(m.acc), icon:'fa-bullseye',      col:kpiColor(m.acc), p:m.acc },
+    { label:'Macro Precision', val: pct(m.p),   icon:'fa-crosshairs',    col:kpiColor(m.p),   p:m.p },
+    { label:'Macro Recall',    val: pct(m.r),   icon:'fa-search',        col:kpiColor(m.r),   p:m.r },
+    { label:'F1-Score',        val: pct(m.f1),  icon:'fa-balance-scale', col:kpiColor(m.f1),  p:m.f1 }
+  ];
+
+  document.getElementById('kpiRow').innerHTML = cards.map(function(c) {
+    return '<div class="card" style="transition:all .2s;">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">' +
+      '<div style="width:36px;height:36px;background:' + c.col + '22;border-radius:9px;display:flex;align-items:center;justify-content:center;">' +
+      '<i class="fas ' + c.icon + '" style="color:' + c.col + ';font-size:.9rem;"></i>' +
+      '</div>' + kpiBadge(c.p) + '</div>' +
+      '<div style="font-size:1.55rem;font-weight:800;color:' + c.col + ';line-height:1;">' + c.val + '</div>' +
+      '<div style="font-size:.73rem;color:var(--muted);margin-top:5px;">' + c.label + '</div>' +
+      '<div style="background:var(--border);border-radius:3px;height:3px;overflow:hidden;margin-top:10px;">' +
+      '<div style="background:' + c.col + ';height:100%;width:' + (c.p*100).toFixed(1) + '%;border-radius:3px;transition:width .4s;"></div>' +
+      '</div></div>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN TAB SWITCHING
+// ═══════════════════════════════════════════════════════════
+
+const MAIN_TABS = ['overview','brand','variant','sku','brandDemo','sizeDemo','trends'];
+
+function switchMainTab(tab) {
+  APP.tabs.main = tab;
+  MAIN_TABS.forEach(function(t) {
+    const btn     = document.getElementById('mtab-' + t);
+    const content = document.getElementById('tcontent-' + t);
+    if (btn)     btn.classList.toggle('active', t === tab);
+    if (content) content.style.display = t === tab ? '' : 'none';
+  });
+  renderActiveTabContent(filteredRows());
+}
+
+function renderActiveTabContent(rows) {
+  const tab = APP.tabs.main;
+  if (tab === 'overview') {
+    renderChart1(rows);
+    renderChart2(rows);
+  } else if (tab === 'brand') {
+    renderBrandChart(rows);
+    renderBrandAccuracy();
+  } else if (tab === 'variant') {
+    renderVariantChart(rows);
+    renderVariantAccuracy();
+  } else if (tab === 'sku') {
+    renderSkuAccuracy();
+  } else if (tab === 'brandDemo') {
+    renderBrandDemo();
+  } else if (tab === 'sizeDemo') {
+    renderSizeDemo();
+  } else if (tab === 'trends') {
+    renderTrendsTab();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════
+
+const CHART_DEFAULTS = {
+  gridColor: '#1f2937',
+  textColor: '#64748b',
+  tickColor: '#94a3b8'
+};
+
+function renderChart1(rows) {
+  const byQ = {};
+  for (const r of rows) {
+    const q = r.quality || 'Unknown';
+    if (!byQ[q]) byQ[q] = { c:0, t:0 };
+    byQ[q].t++;
+    if (r.is_correct) byQ[q].c++;
+  }
+
+  const labels = Object.keys(byQ);
+  const data   = labels.map(function(q) { return byQ[q].t > 0 ? +(byQ[q].c / byQ[q].t * 100).toFixed(1) : 0; });
+  const colors = data.map(function(v) { return v >= 90 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444'; });
+
+  if (APP.charts.c1) { APP.charts.c1.destroy(); APP.charts.c1 = null; }
+  APP.charts.c1 = new Chart(document.getElementById('chart1'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 5 }] },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%'; } } } },
+      scales: {
+        x: { min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y: { ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:11} }, grid:{ display:false } }
+      }
+    }
+  });
+}
+
+function renderChart2(rows) {
+  const bs = {};
+  for (const r of rows) {
+    const b = r.gt_brand || 'Unknown';
+    if (!bs[b]) bs[b] = { t:0, brandOk:0, varOk:0, skuOk:0 };
+    bs[b].t++;
+    if (r.pred_brand === b) bs[b].brandOk++;
+    if (r.gt_variant && r.gt_variant === r.pred_variant) bs[b].varOk++;
+    if (r.is_correct) bs[b].skuOk++;
+  }
+
+  const top10 = Object.entries(bs)
+    .filter(function([b]) { return b && b !== 'Unknown' && b !== ''; })
+    .sort(function(a,b) { return b[1].t - a[1].t; })
+    .slice(0, 10);
+
+  const labels = top10.map(function([b]) { return b; });
+  const brandD = top10.map(function([,s]) { return s.t > 0 ? +(s.brandOk / s.t * 100).toFixed(1) : 0; });
+  const varD   = top10.map(function([,s]) { return s.t > 0 ? +(s.varOk   / s.t * 100).toFixed(1) : 0; });
+  const skuD   = top10.map(function([,s]) { return s.t > 0 ? +(s.skuOk   / s.t * 100).toFixed(1) : 0; });
+
+  if (APP.charts.c2) { APP.charts.c2.destroy(); APP.charts.c2 = null; }
+  APP.charts.c2 = new Chart(document.getElementById('chart2'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Brand Acc %',   data:brandD, backgroundColor:'#3b82f6bb', borderRadius:3 },
+        { label:'Variant Acc %', data:varD,   backgroundColor:'#8b5cf6bb', borderRadius:3 },
+        { label:'SKU Acc %',     data:skuD,   backgroundColor:'#10b981bb', borderRadius:3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        tooltip: { callbacks:{ label: function(c) { return ' ' + c.dataset.label + ': ' + c.raw + '%'; } } }
+      },
+      scales: {
+        x: { ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y: { min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback: function(v) { return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+      }
+    }
+  });
+}
+
+function renderBrandChart(rows) {
+  const bs = {};
+  for (const r of rows) {
+    const b = r.gt_brand || 'Unknown';
+    if (!bs[b]) bs[b] = { c:0, t:0 };
+    bs[b].t++;
+    if (r.is_correct) bs[b].c++;
+  }
+  const top15 = Object.entries(bs)
+    .filter(function([b]) { return b && b !== 'Unknown'; })
+    .sort(function(a,b) { return b[1].t - a[1].t; })
+    .slice(0, 15);
+  const labels = top15.map(function([b]) { return b; });
+  const data   = top15.map(function([,s]) { return s.t > 0 ? +(s.c/s.t*100).toFixed(1) : 0; });
+  const counts = top15.map(function([,s]) { return s.t; });
+  const colors = data.map(function(v) { return v>=90?'#10b981':v>=75?'#f59e0b':'#ef4444'; });
+
+  if (APP.charts.c3) { APP.charts.c3.destroy(); APP.charts.c3 = null; }
+  APP.charts.c3 = new Chart(document.getElementById('chart3'), {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:5 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
+      },
+      scales:{
+        x:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:CHART_DEFAULTS.gridColor} },
+        y:{ ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:10} }, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function renderVariantChart(rows) {
+  const vs = {};
+  for (const r of rows) {
+    const b = r.gt_brand || '';
+    const v = r.gt_variant || '';
+    if (!b && !v) continue;
+    const key = b && v ? (b + ' · ' + v) : (b || v);
+    if (!vs[key]) vs[key] = { c:0, t:0 };
+    vs[key].t++;
+    if (r.is_correct) vs[key].c++;
+  }
+  const top15 = Object.entries(vs)
+    .sort(function(a,b) { return b[1].t - a[1].t; })
+    .slice(0, 15);
+  const labels = top15.map(function([k]) { return k; });
+  const data   = top15.map(function([,s]) { return s.t > 0 ? +(s.c/s.t*100).toFixed(1) : 0; });
+  const counts = top15.map(function([,s]) { return s.t; });
+  const colors = data.map(function(v) { return v>=90?'#10b981':v>=75?'#f59e0b':'#ef4444'; });
+
+  if (APP.charts.c4) { APP.charts.c4.destroy(); APP.charts.c4 = null; }
+  APP.charts.c4 = new Chart(document.getElementById('chart4'), {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:5 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
+      },
+      scales:{
+        x:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:CHART_DEFAULTS.gridColor} },
+        y:{ ticks:{ color:CHART_DEFAULTS.tickColor, font:{size:10} }, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACCURACY BAR HELPER
+// ═══════════════════════════════════════════════════════════
+
+function accBar(acc) {
+  const col = kpiColor(acc);
+  return '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<div style="flex:1;background:var(--border);border-radius:3px;height:3px;min-width:44px;">' +
+    '<div style="background:' + col + ';height:100%;width:' + (acc*100).toFixed(1) + '%;border-radius:3px;"></div>' +
+    '</div>' +
+    '<span style="color:' + col + ';font-weight:600;font-size:.78rem;min-width:40px;">' + pct(acc) + '</span>' +
+    '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// BRAND ACCURACY TABLE WITH DRILL-DOWN
+// ═══════════════════════════════════════════════════════════
+
+function getPredBrandLabel(r) {
+  // For special labels keep as-is; otherwise use masterdata brand
+  if (r.pred === 'Others' || r.pred === 'Non-NARTD') return r.pred;
+  return r.pred_brand || r.pred || 'Unknown';
+}
+
+function buildBrandAccuracy(rows) {
+  const map = {};
+  for (const r of rows) {
+    const brand = r.gt_brand || 'Unknown';
+    if (!map[brand]) {
+      const comp = (APP.d.mMap[r.gt.toLowerCase()] && APP.d.mMap[r.gt.toLowerCase()].competition) || r.gt_comp || '';
+      map[brand] = { brand, correct:0, total:0, competition:comp, errors:{} };
+    }
+    map[brand].total++;
+    if (r.is_correct) {
+      map[brand].correct++;
+    } else {
+      const pb = getPredBrandLabel(r);
+      if (!map[brand].errors[pb]) map[brand].errors[pb] = { count:0, imgs:{} };
+      map[brand].errors[pb].count++;
+      if (!map[brand].errors[pb].imgs[r.sid]) map[brand].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+    }
+  }
+  return Object.values(map)
+    .map(function(b) { return Object.assign({}, b, { accuracy: b.total>0 ? b.correct/b.total : 0, errorCount: b.total-b.correct }); })
+    .sort(function(a,b) { return b.total - a.total; });
+}
+
+function buildImgChips(imgs) {
+  return imgs.map(function(img) {
+    const qc  = qColor(img.quality);
+    const url = img.fp ? ('https://view.shelfwatch.io?url=' + img.fp) : '';
+    const sid8 = img.sid.substring(0,12) + '…';
+    if (url) {
+      return '<a href="' + url + '" target="_blank" class="img-chip" title="' + img.sid + '">' +
+        '<i class="fas fa-image" style="font-size:.65rem;"></i>' +
+        '<span>' + sid8 + '</span>' +
+        '<span style="background:' + qc + '22;color:' + qc + ';border-radius:10px;padding:1px 5px;font-size:.65rem;">' + img.quality + '</span>' +
+        '</a>';
+    }
+    return '<span class="img-chip" title="' + img.sid + '" style="opacity:.5;cursor:default;">' +
+      '<i class="fas fa-image" style="font-size:.65rem;"></i>' +
+      '<span>' + sid8 + '</span>' +
+      '</span>';
+  }).join('');
+}
+
+function buildDrillContent(errors, total, colspan) {
+  // errors = { brandName: { count: N, imgs: { sid: {sid,fp,quality} } } }
+  const entries = Object.entries(errors).sort(function(a,b) { return b[1].count - a[1].count; });
+
+  const tableRows = entries.map(function(entry) {
+    const brandName = entry[0], data = entry[1];
+    const cnt  = data.count;
+    const imgs = Object.values(data.imgs).slice(0, 6);
+    const chips = imgs.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + buildImgChips(imgs) + '</div>'
+      : '<span style="font-size:.7rem;color:var(--muted);font-style:italic;">no image URL</span>';
+
+    return '<tr style="border-bottom:1px solid rgba(31,41,55,.5);">' +
+      '<td style="text-align:left;padding:5px 14px 5px 0;font-size:.79rem;color:#f1f5f9;white-space:nowrap;font-weight:500;">' + brandName + '</td>' +
+      '<td style="text-align:right;padding:5px 12px;font-size:.79rem;color:var(--red);font-weight:600;">' + cnt.toLocaleString() + '</td>' +
+      '<td style="text-align:right;padding:5px 14px;font-size:.79rem;color:var(--muted);">' + (cnt/total*100).toFixed(1) + '%</td>' +
+      '<td style="padding:5px 0 5px 4px;">' + chips + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return '<tr><td colspan="' + colspan + '" style="padding:0;">' +
+    '<div class="drill-wrap">' +
+    '<div class="drill-title"><i class="fas fa-arrow-turn-down" style="margin-right:5px;"></i>Misclassified as (brand) — ' + total + ' error' + (total>1?'s':'') + '</div>' +
+    '<div style="overflow-x:auto;">' +
+    '<table style="border-collapse:collapse;width:100%;">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:3px 14px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted Brand</th>' +
+    '<th style="text-align:right;padding:3px 12px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Count</th>' +
+    '<th style="text-align:right;padding:3px 14px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">% of Errors</th>' +
+    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Affected Images (up to 6 per brand)</th>' +
+    '</tr></thead>' +
+    '<tbody>' + tableRows + '</tbody>' +
+    '</table></div></div></td></tr>';
+}
+
+function renderBrandAccuracy() {
+  const data = buildBrandAccuracy(filteredRows());
+  APP._pivotBrand = data;
+
+  document.getElementById('baHead').innerHTML = '<tr>' +
+    '<th style="width:28px;"></th>' +
+    '<th class="left" style="min-width:130px;">Brand</th>' +
+    '<th class="left" style="min-width:65px;">Type</th>' +
+    '<th style="min-width:65px;">Correct</th>' +
+    '<th style="min-width:65px;">Errors</th>' +
+    '<th style="min-width:55px;">Total</th>' +
+    '<th style="min-width:110px;">Accuracy</th>' +
+    '</tr>';
+
+  if (!data.length) {
+    document.getElementById('baBody').innerHTML = '<tr><td colspan="7" class="left"><div class="empty" style="padding:24px 0;"><i class="fas fa-inbox" style="font-size:1.4rem;"></i>No data</div></td></tr>';
+    return;
+  }
+
+  document.getElementById('baBody').innerHTML = data.map(function(row, i) {
+    const isExpanded = APP._brandExpanded.has(row.brand);
+    const hasErrors  = row.errorCount > 0;
+    const isSelf     = row.competition === 'self';
+    const compLabel  = isSelf ? 'CCI' : (row.competition === 'competitor' ? 'Comp.' : row.competition || '—');
+    const compStyle  = isSelf ? 'color:#10b981;' : 'color:#94a3b8;';
+
+    const expandBtn = hasErrors
+      ? '<button onclick="toggleBrandDrill(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded?'rgba(245,158,11,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded?'var(--amber)':'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;"><i class="fas fa-chevron-' + (isExpanded?'down':'right') + '"></i></button>'
+      : '<span style="width:20px;display:inline-block;"></span>';
+
+    const mainRow = '<tr' + (hasErrors ? ' onclick="toggleBrandDrill(' + i + ')" style="cursor:pointer;"' : '') + '>' +
+      '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
+      '<td class="left" style="font-weight:600;color:#f1f5f9;max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="' + row.brand + '">' + row.brand + '</td>' +
+      '<td class="left"><span style="' + compStyle + 'font-size:.72rem;font-weight:600;">' + compLabel + '</span></td>' +
+      '<td style="color:var(--green);">' + row.correct.toLocaleString() + '</td>' +
+      '<td style="color:' + (hasErrors?'var(--red)':'var(--muted)') + ';font-weight:' + (hasErrors?'600':'400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
+      '<td>' + row.total.toLocaleString() + '</td>' +
+      '<td>' + accBar(row.accuracy) + '</td>' +
+      '</tr>';
+
+    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(row.errors, row.errorCount, 7) : '';
+    return mainRow + drillRow;
+  }).join('');
+}
+
+function toggleBrandDrill(idx) {
+  const b = APP._pivotBrand[idx];
+  if (!b) return;
+  if (APP._brandExpanded.has(b.brand)) APP._brandExpanded.delete(b.brand);
+  else APP._brandExpanded.add(b.brand);
+  renderBrandAccuracy();
+}
+
+// ═══════════════════════════════════════════════════════════
+// VARIANT ACCURACY TABLE WITH DRILL-DOWN
+// ═══════════════════════════════════════════════════════════
+
+function buildVariantAccuracy(rows) {
+  const map = {};
+  for (const r of rows) {
+    const b = r.gt_brand || '';
+    const v = r.gt_variant || '';
+    const key = b + '||' + v;
+    const label = b && v ? (b + ' · ' + v) : (b || v || 'Unknown');
+    if (!map[key]) map[key] = { label, brand:b, variant:v, correct:0, total:0, errors:{} };
+    map[key].total++;
+    if (r.is_correct) {
+      map[key].correct++;
+    } else {
+      const pb = getPredBrandLabel(r);
+      if (!map[key].errors[pb]) map[key].errors[pb] = { count:0, imgs:{} };
+      map[key].errors[pb].count++;
+      if (!map[key].errors[pb].imgs[r.sid]) map[key].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+    }
+  }
+  return Object.values(map)
+    .map(function(v) { return Object.assign({}, v, { accuracy: v.total>0 ? v.correct/v.total : 0, errorCount: v.total-v.correct }); })
+    .sort(function(a,b) { return b.total - a.total; });
+}
+
+function renderVariantAccuracy() {
+  const data = buildVariantAccuracy(filteredRows());
+  APP._pivotVariant = data;
+
+  document.getElementById('vaHead').innerHTML = '<tr>' +
+    '<th style="width:28px;"></th>' +
+    '<th class="left" style="min-width:150px;">Variant</th>' +
+    '<th style="min-width:65px;">Correct</th>' +
+    '<th style="min-width:65px;">Errors</th>' +
+    '<th style="min-width:55px;">Total</th>' +
+    '<th style="min-width:110px;">Accuracy</th>' +
+    '</tr>';
+
+  if (!data.length) {
+    document.getElementById('vaBody').innerHTML = '<tr><td colspan="6" class="left"><div class="empty" style="padding:24px 0;"><i class="fas fa-inbox" style="font-size:1.4rem;"></i>No data</div></td></tr>';
+    return;
+  }
+
+  document.getElementById('vaBody').innerHTML = data.map(function(row, i) {
+    const isExpanded = APP._variantExpanded.has(row.label);
+    const hasErrors  = row.errorCount > 0;
+
+    const expandBtn = hasErrors
+      ? '<button onclick="toggleVariantDrill(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded?'rgba(245,158,11,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded?'var(--amber)':'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;"><i class="fas fa-chevron-' + (isExpanded?'down':'right') + '"></i></button>'
+      : '<span style="width:20px;display:inline-block;"></span>';
+
+    const mainRow = '<tr' + (hasErrors ? ' onclick="toggleVariantDrill(' + i + ')" style="cursor:pointer;"' : '') + '>' +
+      '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
+      '<td class="left" style="font-weight:600;color:#f1f5f9;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + row.label + '">' + row.label + '</td>' +
+      '<td style="color:var(--green);">' + row.correct.toLocaleString() + '</td>' +
+      '<td style="color:' + (hasErrors?'var(--red)':'var(--muted)') + ';font-weight:' + (hasErrors?'600':'400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
+      '<td>' + row.total.toLocaleString() + '</td>' +
+      '<td>' + accBar(row.accuracy) + '</td>' +
+      '</tr>';
+
+    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(row.errors, row.errorCount, 6) : '';
+    return mainRow + drillRow;
+  }).join('');
+}
+
+function toggleVariantDrill(idx) {
+  const v = APP._pivotVariant[idx];
+  if (!v) return;
+  if (APP._variantExpanded.has(v.label)) APP._variantExpanded.delete(v.label);
+  else APP._variantExpanded.add(v.label);
+  renderVariantAccuracy();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SKU ACCURACY TABLE WITH DRILL-DOWN + IMAGES
+// ═══════════════════════════════════════════════════════════
+
+function buildSkuAccuracy(rows) {
+  const map = {};
+  for (const r of rows) {
+    const sku = r.gt || 'Unknown';
+    if (!map[sku]) map[sku] = { sku, brand:r.gt_brand, correct:0, total:0, errors:{} };
+    map[sku].total++;
+    if (r.is_correct) {
+      map[sku].correct++;
+    } else {
+      const pb = getPredBrandLabel(r);
+      if (!map[sku].errors[pb]) map[sku].errors[pb] = { count:0, imgs:{} };
+      map[sku].errors[pb].count++;
+      if (!map[sku].errors[pb].imgs[r.sid]) map[sku].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+    }
+  }
+  return Object.values(map)
+    .map(function(s) { return Object.assign({}, s, { accuracy: s.total>0 ? s.correct/s.total : 0, errorCount: s.total-s.correct }); })
+    .sort(function(a,b) { return b.errorCount - a.errorCount; });
+}
+
+function renderSkuAccuracy() {
+  const q = (APP._skuQ || '').toLowerCase();
+  let data = buildSkuAccuracy(filteredRows());
+  if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.brand || '').toLowerCase().includes(q); });
+  APP._pivotSku = data;
+
+  document.getElementById('skuHead').innerHTML = '<tr>' +
+    '<th style="width:28px;"></th>' +
+    '<th class="left" style="min-width:200px;">SKU (QC Display Name)</th>' +
+    '<th class="left" style="min-width:110px;">Brand</th>' +
+    '<th style="min-width:68px;">Correct</th>' +
+    '<th style="min-width:68px;">Errors</th>' +
+    '<th style="min-width:55px;">Total</th>' +
+    '<th style="min-width:110px;">Accuracy</th>' +
+    '</tr>';
+
+  if (!data.length) {
+    document.getElementById('skuBody').innerHTML = '<tr><td colspan="7" class="left"><div class="empty"><i class="fas fa-inbox"></i>No data matches current filters</div></td></tr>';
+    return;
+  }
+
+  document.getElementById('skuBody').innerHTML = data.map(function(s, i) {
+    const isExpanded = APP._skuExpanded.has(s.sku);
+    const hasErrors  = s.errorCount > 0;
+    const errCol     = hasErrors ? 'var(--red)' : 'var(--muted)';
+
+    const expandBtn = hasErrors
+      ? '<button onclick="toggleSkuDrillIdx(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded?'rgba(245,158,11,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded?'var(--amber)':'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;" title="Show misclassification breakdown"><i class="fas fa-chevron-' + (isExpanded?'down':'right') + '"></i></button>'
+      : '<span style="width:20px;display:inline-block;"></span>';
+
+    const mainRow = '<tr' + (hasErrors ? ' onclick="toggleSkuDrillIdx(' + i + ')" style="cursor:pointer;"' : '') + '>' +
+      '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
+      '<td class="left" style="font-weight:500;color:#f1f5f9;">' + s.sku + '</td>' +
+      '<td class="left" style="color:var(--muted);font-size:.78rem;">' + (s.brand || '—') + '</td>' +
+      '<td style="color:var(--green);">' + s.correct.toLocaleString() + '</td>' +
+      '<td style="color:' + errCol + ';font-weight:' + (hasErrors?'600':'400') + ';">' + s.errorCount.toLocaleString() + '</td>' +
+      '<td>' + s.total.toLocaleString() + '</td>' +
+      '<td>' + accBar(s.accuracy) + '</td>' +
+      '</tr>';
+
+    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(s.errors, s.errorCount, 7) : '';
+    return mainRow + drillRow;
+  }).join('');
+}
+
+function toggleSkuDrillIdx(idx) {
+  const s = APP._pivotSku[idx];
+  if (!s) return;
+  if (APP._skuExpanded.has(s.sku)) APP._skuExpanded.delete(s.sku);
+  else APP._skuExpanded.add(s.sku);
+  renderSkuAccuracy();
+}
+
+// ═══════════════════════════════════════════════════════════
+// BRAND DEMO TABLE
+// ═══════════════════════════════════════════════════════════
+
+function getTopCompetitorBrandsForDemo(rows, n) {
+  n = n || 15;
+  const counts = {};
+  for (const r of rows) {
+    const gtMeta = APP.d.mMap[r.gt.toLowerCase()];
+    const gtComp = gtMeta ? gtMeta.competition : r.gt_comp;
+    if (gtComp !== 'self') continue;
+    if (r.is_correct) continue;
+    const pb = r.pred_brand;
+    if (!pb || pb === 'Others' || pb === 'Non-NARTD' || !pb.trim()) continue;
+    if (pb === r.gt_brand) continue;
+    counts[pb] = (counts[pb] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort(function(a,b) { return b[1]-a[1]; })
+    .slice(0, n)
+    .map(function(e) { return e[0]; });
+}
+
+function buildBrandDemoRows(rows, brands) {
+  const imgMap = {};
+
+  for (const r of rows) {
+    const gtMeta = APP.d.mMap[r.gt.toLowerCase()];
+    const gtComp = gtMeta ? gtMeta.competition : r.gt_comp;
+    if (gtComp !== 'self') continue;
+
+    if (!imgMap[r.sid]) {
+      imgMap[r.sid] = {
+        sid: r.sid, fp: r.fp, quality: r.quality,
+        selfFacings: 0, selfMisclass: 0, nonNARTD: 0, others: 0,
+        bc: {}, total: 0
+      };
+      brands.forEach(function(b) { imgMap[r.sid].bc[b] = 0; });
+    }
+
+    const img = imgMap[r.sid];
+    img.total++;
+
+    if (r.is_correct) {
+      img.selfFacings++;
+    } else if (r.pred === 'Non-NARTD') {
+      img.nonNARTD++;
+    } else if (r.pred === 'Others') {
+      img.others++;
+    } else if (r.gt_brand && r.gt_brand === r.pred_brand) {
+      img.selfMisclass++;
+    } else if (r.pred_brand && r.pred_brand in img.bc) {
+      img.bc[r.pred_brand]++;
+    } else {
+      img.others++;
+    }
+  }
+
+  return Object.values(imgMap).sort(function(a,b) { return b.total - a.total; });
+}
+
+function renderBrandDemo() {
+  const frows  = filteredRows();
+  const brands = getTopCompetitorBrandsForDemo(frows, 15);
+  const allRows = buildBrandDemoRows(frows, brands);
+
+  const q = APP.pg.bd.q.toLowerCase();
+  const filtered = q ? allRows.filter(function(r) { return r.sid.toLowerCase().includes(q); }) : allRows;
+  APP.pg.bd.rows = filtered;
+
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / APP.pg.bd.size));
+  APP.pg.bd.page = Math.min(APP.pg.bd.page, pages);
+  const sl = filtered.slice((APP.pg.bd.page - 1) * APP.pg.bd.size, APP.pg.bd.page * APP.pg.bd.size);
+
+  document.getElementById('bdHead').innerHTML = '<tr>' +
+    '<th class="left s1" style="min-width:190px;">Image ID</th>' +
+    '<th class="left s2" style="min-width:110px;">Quality</th>' +
+    '<th style="min-width:90px;">Self Facings</th>' +
+    '<th style="min-width:110px;">Self Misclass.</th>' +
+    '<th style="min-width:95px;">Non-NARTD</th>' +
+    '<th style="min-width:75px;">Others</th>' +
+    brands.map(function(b) { return '<th style="min-width:80px;" title="' + b + '">' + (b.length > 9 ? b.slice(0,8)+'…' : b) + '</th>'; }).join('') +
+    '<th style="min-width:80px;background:#182030;">Total GT</th>' +
+    '</tr>';
+
+  if (!sl.length) {
+    document.getElementById('bdBody').innerHTML = '<tr><td colspan="' + (6+brands.length) + '" class="left"><div class="empty"><i class="fas fa-inbox"></i>No data matches current filters</div></td></tr>';
+  } else {
+    document.getElementById('bdBody').innerHTML = sl.map(function(row) {
+      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + row.fp) : '';
+      const sid8      = row.sid.substring(0,8) + '…';
+      const qc        = qColor(row.quality);
+      return '<tr>' +
+        '<td class="left s1" style="min-width:220px;">' +
+        '<div style="display:flex;align-items:center;gap:7px;">' +
+        (viewerUrl
+          ? '<a href="' + viewerUrl + '" target="_blank" title="Open in ShelfWatch viewer" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(59,130,246,.18);border-radius:7px;color:var(--blue);flex-shrink:0;text-decoration:none;transition:background .15s;" onmouseover="this.style.background=\'rgba(59,130,246,.35)\'" onmouseout="this.style.background=\'rgba(59,130,246,.18)\'"><i class="fas fa-image" style="font-size:.7rem;"></i></a>'
+          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:#374151;"></i></span>') +
+        '<code style="font-size:.75rem;color:#94a3b8;" title="' + row.sid + '">' + sid8 + '</code>' +
+        '</div></td>' +
+        '<td class="left s2" style="min-width:110px;"><span style="background:' + qc + '22;color:' + qc + ';border-radius:20px;padding:2px 8px;font-size:.73rem;font-weight:600;">' + row.quality + '</span></td>' +
+        '<td style="color:var(--green);font-weight:600;">' + row.selfFacings + '</td>' +
+        '<td style="color:var(--amber);">' + row.selfMisclass + '</td>' +
+        '<td style="color:var(--red);">' + row.nonNARTD + '</td>' +
+        '<td style="color:var(--muted);">' + row.others + '</td>' +
+        brands.map(function(b) { return '<td style="color:#cbd5e1;">' + (row.bc[b]||0) + '</td>'; }).join('') +
+        '<td style="font-weight:700;color:var(--text);">' + row.total + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  renderPag('bdPag', 'bd', total, pages);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIZE DEMO TABLE
+// ═══════════════════════════════════════════════════════════
+
+function buildSizeDemoRows(rows) {
+  const imgMap = {};
+  const brandSet = new Set();
+
+  for (const r of rows) {
+    if (r.is_correct) continue;
+    if (!r.gt_brand || r.gt_brand !== r.pred_brand) continue;
+    if (!r.gt_measure || !r.pred_measure) continue;
+    if (r.gt_measure === r.pred_measure) continue;
+
+    brandSet.add(r.gt_brand);
+    if (!imgMap[r.sid]) {
+      imgMap[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality, total:0, bc:{} };
+    }
+    imgMap[r.sid].total++;
+    imgMap[r.sid].bc[r.gt_brand] = (imgMap[r.sid].bc[r.gt_brand] || 0) + 1;
+  }
+
+  APP._sdBrands = [...brandSet].sort();
+  return Object.values(imgMap).sort(function(a,b) { return b.total - a.total; });
+}
+
+function renderSizeDemo() {
+  const allRows = buildSizeDemoRows(filteredRows());
+  const freshBrands = APP._sdBrands;
+
+  const q = APP.pg.sd.q.toLowerCase();
+  const filtered = q ? allRows.filter(function(r) { return r.sid.toLowerCase().includes(q); }) : allRows;
+  APP.pg.sd.rows = filtered;
+
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / APP.pg.sd.size));
+  APP.pg.sd.page = Math.min(APP.pg.sd.page, pages);
+  const sl = filtered.slice((APP.pg.sd.page - 1) * APP.pg.sd.size, APP.pg.sd.page * APP.pg.sd.size);
+
+  document.getElementById('sdHead').innerHTML = '<tr>' +
+    '<th class="left s1" style="min-width:190px;">Image ID</th>' +
+    '<th class="left s2" style="min-width:110px;">Quality</th>' +
+    '<th style="min-width:110px;">Total Size Errors</th>' +
+    freshBrands.map(function(b) { return '<th style="min-width:80px;" title="' + b + '">' + (b.length>9?b.slice(0,8)+'…':b) + '</th>'; }).join('') +
+    '</tr>';
+
+  if (!sl.length) {
+    document.getElementById('sdBody').innerHTML = '<tr><td colspan="' + (3+freshBrands.length) + '" class="left"><div class="empty"><i class="fas fa-check-circle" style="color:var(--green);"></i>No size errors in current view</div></td></tr>';
+  } else {
+    document.getElementById('sdBody').innerHTML = sl.map(function(row) {
+      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + row.fp) : '';
+      const sid8      = row.sid.substring(0,8) + '…';
+      const qc        = qColor(row.quality);
+      return '<tr>' +
+        '<td class="left s1" style="min-width:220px;">' +
+        '<div style="display:flex;align-items:center;gap:7px;">' +
+        (viewerUrl
+          ? '<a href="' + viewerUrl + '" target="_blank" title="Open in ShelfWatch viewer" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(59,130,246,.18);border-radius:7px;color:var(--blue);flex-shrink:0;text-decoration:none;transition:background .15s;" onmouseover="this.style.background=\'rgba(59,130,246,.35)\'" onmouseout="this.style.background=\'rgba(59,130,246,.18)\'"><i class="fas fa-image" style="font-size:.7rem;"></i></a>'
+          : '<span style="display:inline-flex;width:26px;height:26px;align-items:center;justify-content:center;background:rgba(100,116,139,.1);border-radius:7px;flex-shrink:0;" title="No image URL mapped"><i class="fas fa-image" style="font-size:.7rem;color:#374151;"></i></span>') +
+        '<code style="font-size:.75rem;color:#94a3b8;" title="' + row.sid + '">' + sid8 + '</code>' +
+        '</div></td>' +
+        '<td class="left s2" style="min-width:110px;"><span style="background:' + qc + '22;color:' + qc + ';border-radius:20px;padding:2px 8px;font-size:.73rem;font-weight:600;">' + row.quality + '</span></td>' +
+        '<td style="color:var(--amber);font-weight:600;">' + row.total + '</td>' +
+        freshBrands.map(function(b) { return '<td style="color:#cbd5e1;">' + (row.bc[b]||0) + '</td>'; }).join('') +
+        '</tr>';
+    }).join('');
+  }
+
+  renderPag('sdPag', 'sd', total, pages);
+}
+
+// ═══════════════════════════════════════════════════════════
+// PAGINATION
+// ═══════════════════════════════════════════════════════════
+
+function renderPag(elId, key, total, pages) {
+  const pg = APP.pg[key];
+  const s  = (pg.page - 1) * pg.size + 1;
+  const e  = Math.min(pg.page * pg.size, total);
+  document.getElementById(elId).innerHTML =
+    '<span>Showing ' + (total===0?0:s) + '–' + e + ' of ' + total.toLocaleString() + ' images</span>' +
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+    '<button onclick="changePg(\'' + key + '\',' + (pg.page-1) + ')" ' + (pg.page<=1?'disabled':'') + ' class="btn btn-ghost btn-sm" style="' + (pg.page<=1?'opacity:.4;cursor:not-allowed;':'') + '"><i class="fas fa-chevron-left"></i></button>' +
+    '<span>Page ' + pg.page + ' of ' + pages + '</span>' +
+    '<button onclick="changePg(\'' + key + '\',' + (pg.page+1) + ')" ' + (pg.page>=pages?'disabled':'') + ' class="btn btn-ghost btn-sm" style="' + (pg.page>=pages?'opacity:.4;cursor:not-allowed;':'') + '"><i class="fas fa-chevron-right"></i></button>' +
+    '</div>';
+}
+
+function changePg(key, page) {
+  APP.pg[key].page = page;
+  if (key === 'bd') renderBrandDemo();
+  else renderSizeDemo();
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════
+
+function exportCSV(key) {
+  let headers, rows, filename;
+
+  if (key === 'bd') {
+    const frows  = filteredRows();
+    const brands = getTopCompetitorBrandsForDemo(frows, 15);
+    const all    = APP.pg.bd.rows.length ? APP.pg.bd.rows : buildBrandDemoRows(frows, brands);
+    headers  = ['Image ID','Image Quality','Self Facings','Self Misclassification','Non-NARTD','Others'].concat(brands).concat(['Total Self GT']);
+    rows     = all.map(function(r) { return [r.sid, r.quality, r.selfFacings, r.selfMisclass, r.nonNARTD, r.others].concat(brands.map(function(b){return r.bc[b]||0;})).concat([r.total]); });
+    filename = 'brand_demo_sheet.csv';
+  } else {
+    const brands = APP._sdBrands || [];
+    const all    = APP.pg.sd.rows.length ? APP.pg.sd.rows : buildSizeDemoRows(filteredRows());
+    headers  = ['Image ID','Image Quality','Total Size Errors'].concat(brands);
+    rows     = all.map(function(r) { return [r.sid, r.quality, r.total].concat(brands.map(function(b){return r.bc[b]||0;})); });
+    filename = 'size_demo_sheet.csv';
+  }
+
+  const esc = function(v) { return '"' + String(v).replace(/"/g,'""') + '"'; };
+  const csv = [headers.map(esc).join(',')].concat(rows.map(function(r) { return r.map(esc).join(','); })).join('\n');
+  const blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href:url, download:filename });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════
+
+function qColor(q) {
+  return {
+    Good:'#10b981', Average:'#f59e0b', Poor:'#ef4444',
+    Impossible:'#94a3b8', Blank:'#64748b', Blurred:'#6366f1', Unknown:'#374151'
+  }[q] || '#475569';
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN RENDER ORCHESTRATOR
+// ═══════════════════════════════════════════════════════════
+
+function renderAll() {
+  const rows = filteredRows();
+  renderHeadlineStats(rows);
+  renderKPIs(computeMetrics(rows));
+  renderFilters();
+  renderActiveTabContent(rows);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TREND TRACKING — localStorage persistence
+// ═══════════════════════════════════════════════════════════
+
+const HISTORY_KEY = 'cci_accuracy_history_v1';
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+function saveSnapshot() {
+  var allRows = APP.d.rows;
+  if (!allRows.length) return;
+  var m = computeMetrics(allRows);
+
+  var brandArr = buildBrandAccuracy(allRows);
+  var brandStats = {};
+  brandArr.forEach(function(b) { brandStats[b.brand] = { correct:b.correct, total:b.total, accuracy:b.accuracy }; });
+
+  var varArr = buildVariantAccuracy(allRows);
+  var variantStats = {};
+  varArr.forEach(function(v) { variantStats[v.label] = { correct:v.correct, total:v.total, accuracy:v.accuracy }; });
+
+  var skuArr = buildSkuAccuracy(allRows).slice(0, 150);
+  var skuStats = {};
+  skuArr.forEach(function(s) { skuStats[s.sku] = { correct:s.correct, total:s.total, accuracy:s.accuracy, errorCount:s.errorCount }; });
+
+  var snapshot = {
+    id: APP.d.modelId + '__' + APP.d.date,
+    modelId: APP.d.modelId,
+    date: APP.d.date,
+    label: APP.d.modelId + ' (' + APP.d.date + ')',
+    savedAt: new Date().toISOString(),
+    kpis: { acc:m.acc, p:m.p, r:m.r, f1:m.f1, total:m.total },
+    brandStats: brandStats,
+    variantStats: variantStats,
+    skuStats: skuStats
+  };
+
+  var history = getHistory();
+  var idx = history.findIndex(function(h) { return h.id === snapshot.id; });
+  if (idx >= 0) history[idx] = snapshot;
+  else history.push(snapshot);
+
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
+  catch(e) { console.warn('Could not save snapshot:', e); }
+}
+
+function deleteSnapshot(id) {
+  var history = getHistory().filter(function(h) { return h.id !== id; });
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  renderTrendsTab();
+}
+
+function clearHistory() {
+  if (!confirm('Clear all trend history? This cannot be undone.')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  renderTrendsTab();
+}
+
+// ── Colour palette for up to 12 trend lines ──────────────────
+var TREND_COLORS = [
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4',
+  '#f97316','#84cc16','#ec4899','#14b8a6','#a78bfa','#fb923c'
+];
+
+function renderTrendsTab() {
+  var history = getHistory().sort(function(a,b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+
+  renderHistoryTable(history);
+  renderKpiTrendChart(history);
+
+  // Auto-seed selectors on first visit
+  if (!APP._trendBrands.length) {
+    var bc = {};
+    history.forEach(function(h) { Object.entries(h.brandStats).forEach(function(e) { bc[e[0]] = (bc[e[0]]||0) + e[1].total; }); });
+    APP._trendBrands = Object.entries(bc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return e[0];});
+  }
+  if (!APP._trendVariants.length) {
+    var vc = {};
+    history.forEach(function(h) { Object.entries(h.variantStats).forEach(function(e) { vc[e[0]] = (vc[e[0]]||0) + e[1].total; }); });
+    APP._trendVariants = Object.entries(vc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return e[0];});
+  }
+  if (!APP._trendSkus.length) {
+    var sc = {};
+    history.forEach(function(h) { Object.entries(h.skuStats).forEach(function(e) { sc[e[0]] = (sc[e[0]]||0) + (e[1].errorCount||0); }); });
+    APP._trendSkus = Object.entries(sc).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return e[0];});
+  }
+
+  renderBrandTrendSelector(history);
+  renderBrandTrendChart(history);
+  renderVariantTrendSelector(history);
+  renderVariantTrendChart(history);
+  renderSkuTrendSelector(history);
+  renderSkuTrendChart(history);
+}
+
+function renderHistoryTable(history) {
+  var el = document.getElementById('trendsHistoryTable');
+  if (!history.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px 0;"><i class="fas fa-chart-line"></i>No history yet — process data with a Model ID and Date to start tracking trends.</div>';
+    return;
+  }
+  var rows = history.slice().reverse().map(function(h) {
+    var acc = h.kpis ? (h.kpis.acc*100).toFixed(1)+'%' : '—';
+    var f1  = h.kpis ? (h.kpis.f1 *100).toFixed(1)+'%' : '—';
+    var p   = h.kpis ? (h.kpis.p  *100).toFixed(1)+'%' : '—';
+    var r   = h.kpis ? (h.kpis.r  *100).toFixed(1)+'%' : '—';
+    var col = h.kpis ? kpiColor(h.kpis.acc) : 'var(--muted)';
+    var isCur = APP.d.modelId && h.modelId === APP.d.modelId && h.date === APP.d.date;
+    return '<tr style="' + (isCur ? 'background:rgba(59,130,246,.07);' : '') + '">' +
+      '<td class="left" style="font-weight:600;color:#f1f5f9;">' + h.modelId +
+        (isCur ? ' <span style="font-size:.63rem;background:rgba(59,130,246,.2);color:var(--blue);border-radius:10px;padding:1px 7px;margin-left:5px;">current</span>' : '') + '</td>' +
+      '<td class="left" style="color:var(--muted);">' + h.date + '</td>' +
+      '<td style="color:' + col + ';font-weight:600;">' + acc + '</td>' +
+      '<td style="color:var(--muted);">' + p + '</td>' +
+      '<td style="color:var(--muted);">' + r + '</td>' +
+      '<td style="color:var(--muted);">' + f1 + '</td>' +
+      '<td style="color:var(--muted);">' + (h.kpis ? h.kpis.total.toLocaleString() : '—') + '</td>' +
+      '<td><button onclick="deleteSnapshot(' + JSON.stringify(h.id) + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.75rem;opacity:.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5" title="Delete this run"><i class="fas fa-trash"></i></button></td>' +
+      '</tr>';
+  }).join('');
+
+  el.innerHTML = '<div class="tbl-wrap" style="max-height:220px;">' +
+    '<table class="tbl"><thead><tr>' +
+    '<th class="left">Model ID</th>' +
+    '<th class="left">Date</th>' +
+    '<th>Object Acc</th>' +
+    '<th>Precision</th>' +
+    '<th>Recall</th>' +
+    '<th>F1-Score</th>' +
+    '<th>BBoxes</th>' +
+    '<th style="width:36px;"></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function renderKpiTrendChart(history) {
+  if (APP.charts.c5) { APP.charts.c5.destroy(); APP.charts.c5 = null; }
+  if (!history.length) return;
+  var labels = history.map(function(h) { return h.modelId + '\n' + h.date; });
+  var datasets = [
+    { label:'Object Accuracy', data:history.map(function(h){ return h.kpis?+(h.kpis.acc*100).toFixed(1):null; }), borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.08)', tension:.3, fill:false, pointRadius:5, borderWidth:2 },
+    { label:'Macro Precision', data:history.map(function(h){ return h.kpis?+(h.kpis.p  *100).toFixed(1):null; }), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,.08)', tension:.3, fill:false, pointRadius:5, borderWidth:2 },
+    { label:'Macro Recall',    data:history.map(function(h){ return h.kpis?+(h.kpis.r  *100).toFixed(1):null; }), borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.3, fill:false, pointRadius:5, borderWidth:2 },
+    { label:'F1-Score',        data:history.map(function(h){ return h.kpis?+(h.kpis.f1 *100).toFixed(1):null; }), borderColor:'#8b5cf6', backgroundColor:'rgba(139,92,246,.08)', tension:.3, fill:false, pointRadius:5, borderWidth:2 }
+  ];
+  APP.charts.c5 = new Chart(document.getElementById('chart5'), {
+    type:'line', data:{ labels:labels, datasets:datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
+      scales:{
+        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+      }
+    }
+  });
+}
+
+function buildTrendSelector(elId, items, selectedArr, type) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  el.innerHTML = items.map(function(item, i) {
+    var active = selectedArr.indexOf(item) >= 0;
+    var color  = TREND_COLORS[i % TREND_COLORS.length];
+    var short  = item.length > 24 ? item.slice(0,22)+'…' : item;
+    return '<button onclick="toggleTrendItem(\''+type+'\','+JSON.stringify(item)+')" title="'+item+'" ' +
+      'style="font-size:.71rem;padding:3px 10px;border-radius:20px;cursor:pointer;transition:all .15s;' +
+      'border:1px solid '+(active?color:'var(--border)')+';' +
+      'background:'+(active?color+'22':'transparent')+';' +
+      'color:'+(active?color:'var(--muted)')+';' +
+      '">' + short + '</button>';
+  }).join('');
+}
+
+function renderBrandTrendSelector(history) {
+  var seen = {}, order = [];
+  history.forEach(function(h) { Object.keys(h.brandStats).forEach(function(b) { if (!seen[b]) { seen[b]=0; order.push(b); } seen[b]+=h.brandStats[b].total; }); });
+  order.sort(function(a,b){ return seen[b]-seen[a]; });
+  buildTrendSelector('brandTrendSelector', order.slice(0,12), APP._trendBrands, 'brand');
+}
+
+function renderBrandTrendChart(history) {
+  if (APP.charts.c6) { APP.charts.c6.destroy(); APP.charts.c6 = null; }
+  if (!history.length) return;
+  var labels = history.map(function(h) { return h.modelId+'\n'+h.date; });
+  var datasets = APP._trendBrands.map(function(brand, i) {
+    var color = TREND_COLORS[i % TREND_COLORS.length];
+    return { label:brand, borderColor:color, backgroundColor:color+'18', tension:.3, fill:false, pointRadius:5, borderWidth:2, spanGaps:true,
+      data:history.map(function(h){ var s=h.brandStats[brand]; return s?+(s.accuracy*100).toFixed(1):null; }) };
+  });
+  APP.charts.c6 = new Chart(document.getElementById('chart6'), {
+    type:'line', data:{ labels:labels, datasets:datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
+      scales:{
+        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+      }
+    }
+  });
+}
+
+function renderVariantTrendSelector(history) {
+  var seen = {}, order = [];
+  history.forEach(function(h) { Object.keys(h.variantStats).forEach(function(v) { if (!seen[v]) { seen[v]=0; order.push(v); } seen[v]+=h.variantStats[v].total; }); });
+  order.sort(function(a,b){ return seen[b]-seen[a]; });
+  buildTrendSelector('variantTrendSelector', order.slice(0,12), APP._trendVariants, 'variant');
+}
+
+function renderVariantTrendChart(history) {
+  if (APP.charts.c7) { APP.charts.c7.destroy(); APP.charts.c7 = null; }
+  if (!history.length) return;
+  var labels = history.map(function(h) { return h.modelId+'\n'+h.date; });
+  var datasets = APP._trendVariants.map(function(variant, i) {
+    var color = TREND_COLORS[i % TREND_COLORS.length];
+    return { label:variant, borderColor:color, backgroundColor:color+'18', tension:.3, fill:false, pointRadius:5, borderWidth:2, spanGaps:true,
+      data:history.map(function(h){ var s=h.variantStats[variant]; return s?+(s.accuracy*100).toFixed(1):null; }) };
+  });
+  APP.charts.c7 = new Chart(document.getElementById('chart7'), {
+    type:'line', data:{ labels:labels, datasets:datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
+      scales:{
+        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+      }
+    }
+  });
+}
+
+function renderSkuTrendSelector(history) {
+  var ec = {};
+  history.forEach(function(h) { Object.entries(h.skuStats).forEach(function(e) { ec[e[0]] = (ec[e[0]]||0) + (e[1].errorCount||0); }); });
+  var order = Object.entries(ec).sort(function(a,b){ return b[1]-a[1]; }).slice(0,12).map(function(e){ return e[0]; });
+  buildTrendSelector('skuTrendSelector', order, APP._trendSkus, 'sku');
+}
+
+function renderSkuTrendChart(history) {
+  if (APP.charts.c8) { APP.charts.c8.destroy(); APP.charts.c8 = null; }
+  if (!history.length) return;
+  var labels = history.map(function(h) { return h.modelId+'\n'+h.date; });
+  var datasets = APP._trendSkus.map(function(sku, i) {
+    var color = TREND_COLORS[i % TREND_COLORS.length];
+    var short = sku.length > 22 ? sku.slice(0,20)+'…' : sku;
+    return { label:short, borderColor:color, backgroundColor:color+'18', tension:.3, fill:false, pointRadius:5, borderWidth:2, spanGaps:true,
+      data:history.map(function(h){ var s=h.skuStats[sku]; return s?+(s.accuracy*100).toFixed(1):null; }) };
+  });
+  APP.charts.c8 = new Chart(document.getElementById('chart8'), {
+    type:'line', data:{ labels:labels, datasets:datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:CHART_DEFAULTS.tickColor, font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
+      scales:{
+        x:{ ticks:{ color:CHART_DEFAULTS.textColor, font:{size:9}, maxRotation:35 }, grid:{ color:CHART_DEFAULTS.gridColor } },
+        y:{ min:0, max:100, ticks:{ color:CHART_DEFAULTS.textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:CHART_DEFAULTS.gridColor } }
+      }
+    }
+  });
+}
+
+function toggleTrendItem(type, item) {
+  var arr = type === 'brand' ? APP._trendBrands : type === 'variant' ? APP._trendVariants : APP._trendSkus;
+  var idx = arr.indexOf(item);
+  if (idx >= 0) arr.splice(idx, 1);
+  else if (arr.length < 8) arr.push(item);
+  var history = getHistory().sort(function(a,b){ return a.date<b.date?-1:1; });
+  if (type === 'brand')   { renderBrandTrendSelector(history);   renderBrandTrendChart(history); }
+  else if (type==='variant') { renderVariantTrendSelector(history); renderVariantTrendChart(history); }
+  else                    { renderSkuTrendSelector(history);     renderSkuTrendChart(history); }
+}
+
+function resetAll() {
+  ['det','iq','md'].forEach(function(k) {
+    APP.files[k] = null; APP.raw[k] = null;
+    document.getElementById('zone-' + k).classList.remove('staged');
+    document.getElementById('staged-' + k).style.display = 'none';
+    document.getElementById('inp-' + k).value = '';
+  });
+  if (APP.charts.c1) { APP.charts.c1.destroy(); APP.charts.c1 = null; }
+  if (APP.charts.c2) { APP.charts.c2.destroy(); APP.charts.c2 = null; }
+  if (APP.charts.c3) { APP.charts.c3.destroy(); APP.charts.c3 = null; }
+  if (APP.charts.c4) { APP.charts.c4.destroy(); APP.charts.c4 = null; }
+  ['c5','c6','c7','c8'].forEach(function(k) { if (APP.charts[k]) { APP.charts[k].destroy(); APP.charts[k] = null; } });
+  APP._trendBrands = []; APP._trendVariants = []; APP._trendSkus = [];
+  document.getElementById('processBtn').disabled = true;
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('uploadScreen').style.display = 'flex';
+  APP._skuExpanded = new Set();
+  APP._skuQ = '';
+  APP._pivotSku = [];
+  APP._brandExpanded = new Set();
+  APP._variantExpanded = new Set();
+  APP._pivotBrand = [];
+  APP._pivotVariant = [];
+}
+// Set date input to today on load
+(function() {
+  var d = document.getElementById('inp-runDate');
+  if (d) d.value = new Date().toISOString().split('T')[0];
+})();
+</script>
+</body>
+</html>

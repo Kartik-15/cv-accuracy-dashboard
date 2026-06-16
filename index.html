@@ -392,6 +392,7 @@
           </div>
           <div style="height:320px;"><canvas id="chart3"></canvas></div>
         </div>
+        <div id="brandBreakdownCharts"></div>
         <div class="card">
           <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px;">
             <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy
@@ -582,7 +583,8 @@ const APP = {
   _brandExpanded: new Set(),
   _variantExpanded: new Set(),
   _pivotBrand: [],
-  _pivotVariant: []
+  _pivotVariant: [],
+  _breakdownCharts: {}
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1333,6 +1335,7 @@ function renderActiveTabContent(rows) {
     renderChart2(rows);
   } else if (tab === 'brand') {
     renderBrandChart(rows);
+    renderBrandBreakdownCharts(rows);
     renderBrandAccuracy();
     renderBrandDemo();
   } else if (tab === 'variant') {
@@ -1509,6 +1512,102 @@ function renderBrandChart(rows) {
         y:{ ticks:{ color:getChartDefaults().tickColor, font:{size:10} }, grid:{display:false} }
       }
     }
+  });
+}
+
+function renderBrandSubChart(canvasId, rows) {
+  var bs = {};
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var b = r.gt_brand || 'Unknown';
+    if (!bs[b]) bs[b] = { c:0, t:0 };
+    bs[b].t++;
+    if (r.pred_brand === b) bs[b].c++;
+  }
+  var top15 = Object.entries(bs)
+    .filter(function(e) { return e[0] && e[0] !== 'Unknown'; })
+    .sort(function(a,b) { return b[1].t - a[1].t; })
+    .slice(0, 15);
+  if (!top15.length) return null;
+  var labels = top15.map(function(e) { return e[0]; });
+  var data   = top15.map(function(e) { return e[1].t > 0 ? +(e[1].c/e[1].t*100).toFixed(1) : 0; });
+  var counts = top15.map(function(e) { return e[1].t; });
+  var colors = data.map(function(v) { return v>=90?'#10b981':v>=75?'#f59e0b':'#ef4444'; });
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return new Chart(canvas, {
+    type:'bar',
+    data:{ labels:labels, datasets:[{ data:data, backgroundColor:colors, borderRadius:4 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:function(c){ return ' '+c.raw+'%  ('+counts[c.dataIndex].toLocaleString()+' GT bboxes)'; } } }
+      },
+      scales:{
+        x:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:9}, callback:function(v){return v+'%';} }, grid:{color:getChartDefaults().gridColor} },
+        y:{ ticks:{ color:getChartDefaults().tickColor, font:{size:9} }, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function renderBrandBreakdownCharts(rows) {
+  Object.values(APP._breakdownCharts).forEach(function(c) { if (c) c.destroy(); });
+  APP._breakdownCharts = {};
+  var container = document.getElementById('brandBreakdownCharts');
+  if (!container) return;
+
+  var defs = buildFilterSectionDefs();
+  var visibleDefs = defs.filter(function(def) { return APP._visibleFilterSections.has(def.key); });
+
+  // Build groups: for each visible filter, collect sub-rows per value
+  var groups = [];
+  visibleDefs.forEach(function(def) {
+    var items = [];
+    (def.items || []).forEach(function(val, j) {
+      var subRows;
+      if (def.key === 'qualities') {
+        subRows = rows.filter(function(r) { return r.quality === val; });
+      } else if (def.key.startsWith('attr:')) {
+        var attr = def.key.slice(5);
+        subRows = rows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
+      }
+      if (subRows && subRows.length > 0) {
+        var safeId = 'bbd_' + def.key.replace(/[^a-zA-Z0-9]/g,'_') + '_' + j;
+        items.push({ val:val, rows:subRows, id:safeId });
+      }
+    });
+    if (items.length > 0) groups.push({ def:def, items:items });
+  });
+
+  if (!groups.length) { container.innerHTML = ''; return; }
+
+  var nCols = groups.reduce(function(mx,g) { return Math.max(mx, g.items.length); }, 1);
+  var colW = nCols === 1 ? '1fr' : 'repeat(auto-fill,minmax(360px,1fr))';
+
+  var html = groups.map(function(g) {
+    return '<div style="margin-bottom:16px;">' +
+      '<div style="font-size:.8rem;font-weight:600;color:var(--section-label);margin-bottom:10px;display:flex;align-items:center;gap:7px;">' +
+      '<i class="fas ' + g.def.icon + '" style="color:' + g.def.color + ';font-size:.72rem;"></i>' +
+      'Brand Accuracy by ' + g.def.label + '</div>' +
+      '<div style="display:grid;grid-template-columns:' + colW + ';gap:12px;">' +
+      g.items.map(function(item) {
+        var barH = Math.min(Math.max(item.rows.length > 0 ? 15*22+40 : 140, 140), 380);
+        return '<div class="card" style="padding:14px;">' +
+          '<div style="font-size:.74rem;font-weight:600;color:var(--muted);margin-bottom:8px;">' + item.val + '</div>' +
+          '<div style="position:relative;height:' + barH + 'px;"><canvas id="' + item.id + '"></canvas></div>' +
+          '</div>';
+      }).join('') +
+      '</div></div>';
+  }).join('');
+
+  container.innerHTML = html;
+
+  groups.forEach(function(g) {
+    g.items.forEach(function(item) {
+      APP._breakdownCharts[item.id] = renderBrandSubChart(item.id, item.rows);
+    });
   });
 }
 

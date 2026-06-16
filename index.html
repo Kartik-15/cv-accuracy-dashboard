@@ -322,8 +322,7 @@
         <button class="main-tab"        id="mtab-brand"     onclick="switchMainTab('brand')"><i class="fas fa-tag" style="margin-right:6px;"></i>Brand Analysis</button>
         <button class="main-tab"        id="mtab-variant"   onclick="switchMainTab('variant')"><i class="fas fa-box" style="margin-right:6px;"></i>Variant Analysis</button>
         <button class="main-tab"        id="mtab-sku"       onclick="switchMainTab('sku')"><i class="fas fa-microscope" style="margin-right:6px;"></i>SKU Analysis</button>
-        <button class="main-tab"        id="mtab-brandDemo" onclick="switchMainTab('brandDemo')"><i class="fas fa-list-check" style="margin-right:6px;"></i>Brand Demo</button>
-        <button class="main-tab"        id="mtab-sizeDemo"  onclick="switchMainTab('sizeDemo')"><i class="fas fa-ruler-combined" style="margin-right:6px;"></i>Size Demo</button>
+
         <button class="main-tab"        id="mtab-trends"    onclick="switchMainTab('trends')"><i class="fas fa-chart-line" style="margin-right:6px;"></i>Trends</button>
       </div>
 
@@ -361,6 +360,23 @@
           <div class="tbl-wrap" style="max-height:420px;">
             <table class="tbl"><thead id="baHead"></thead><tbody id="baBody"></tbody></table>
           </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+            <div>
+              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-list-check" style="color:var(--green);"></i>Brand Demonstration Sheet
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level — Top 15 competitor brands)</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Classification breakdown per image for self-brand bounding boxes</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="search" id="bdSearch" placeholder="Search session ID…" style="width:190px;" oninput="APP.pg.bd.page=1;APP.pg.bd.q=this.value;renderBrandDemo()">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV('bd')"><i class="fas fa-download"></i> Export</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead id="bdHead"></thead><tbody id="bdBody"></tbody></table></div>
+          <div id="bdPag" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted);"></div>
         </div>
       </div>
 
@@ -400,32 +416,7 @@
             <table class="tbl"><thead id="skuHead"></thead><tbody id="skuBody"></tbody></table>
           </div>
         </div>
-      </div>
-
-      <!-- Tab: Brand Demo -->
-      <div id="tcontent-brandDemo" style="display:none;">
-        <div class="card">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
-            <div>
-              <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
-                <i class="fas fa-list-check" style="color:var(--green);"></i>Brand Demonstration Sheet
-                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Image Level — Top 15 competitor brands)</span>
-              </div>
-              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Classification breakdown per image for self-brand bounding boxes</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="search" id="bdSearch" placeholder="Search session ID…" style="width:190px;" oninput="APP.pg.bd.page=1;APP.pg.bd.q=this.value;renderBrandDemo()">
-              <button class="btn btn-ghost btn-sm" onclick="exportCSV('bd')"><i class="fas fa-download"></i> Export</button>
-            </div>
-          </div>
-          <div class="tbl-wrap"><table class="tbl"><thead id="bdHead"></thead><tbody id="bdBody"></tbody></table></div>
-          <div id="bdPag" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted);"></div>
-        </div>
-      </div>
-
-      <!-- Tab: Size Demo -->
-      <div id="tcontent-sizeDemo" style="display:none;">
-        <div class="card">
+        <div class="card" style="margin-top:16px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
             <div>
               <div style="font-size:.87rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;">
@@ -538,6 +529,7 @@ const APP = {
   },
   tabs: { main: 'overview' },
   charts: { c1:null, c2:null, c3:null, c4:null, c5:null, c6:null, c7:null, c8:null },
+  _sort: { brand:{col:null,dir:'desc'}, variant:{col:null,dir:'desc'}, sku:{col:null,dir:'desc'}, bd:{col:null,dir:'desc'}, sd:{col:null,dir:'desc'} },
   _sdBrands: [],
   _skuExpanded: new Set(),
   _skuQ: '',
@@ -1150,7 +1142,7 @@ function renderKPIs(m) {
 // MAIN TAB SWITCHING
 // ═══════════════════════════════════════════════════════════
 
-const MAIN_TABS = ['overview','brand','variant','sku','brandDemo','sizeDemo','trends'];
+const MAIN_TABS = ['overview','brand','variant','sku','trends'];
 
 function switchMainTab(tab) {
   APP.tabs.main = tab;
@@ -1171,18 +1163,59 @@ function renderActiveTabContent(rows) {
   } else if (tab === 'brand') {
     renderBrandChart(rows);
     renderBrandAccuracy();
+    renderBrandDemo();
   } else if (tab === 'variant') {
     renderVariantChart(rows);
     renderVariantAccuracy();
   } else if (tab === 'sku') {
     renderSkuAccuracy();
-  } else if (tab === 'brandDemo') {
-    renderBrandDemo();
-  } else if (tab === 'sizeDemo') {
     renderSizeDemo();
   } else if (tab === 'trends') {
     renderTrendsTab();
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SORT HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function sortTable(table, col) {
+  const s = APP._sort[table];
+  if (s.col === col) s.dir = s.dir === 'asc' ? 'desc' : 'asc';
+  else { s.col = col; s.dir = 'desc'; }
+  if (table === 'brand') renderBrandAccuracy();
+  else if (table === 'variant') renderVariantAccuracy();
+  else if (table === 'sku') renderSkuAccuracy();
+  else if (table === 'bd') renderBrandDemo();
+  else if (table === 'sd') renderSizeDemo();
+}
+
+function applySort(arr, table) {
+  const s = APP._sort[table];
+  if (!s || !s.col) return arr;
+  const col = s.col;
+  const dir = s.dir === 'asc' ? 1 : -1;
+  return arr.slice().sort(function(a, b) {
+    var av, bv;
+    if (col.startsWith('bc:')) {
+      var bname = col.slice(3);
+      av = a.bc ? (a.bc[bname] || 0) : 0;
+      bv = b.bc ? (b.bc[bname] || 0) : 0;
+    } else {
+      av = a[col] !== undefined ? a[col] : '';
+      bv = b[col] !== undefined ? b[col] : '';
+    }
+    if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv) * dir;
+    return (av - bv) * dir;
+  });
+}
+
+function sTh(label, table, col, cls, style) {
+  var s = APP._sort[table];
+  var active = s && s.col === col;
+  var icon = active ? (s.dir === 'asc' ? '&#8593;' : '&#8595;') : '&#8597;';
+  var iconColor = active ? 'var(--blue)' : '#2a3a52';
+  return '<th class="' + (cls||'') + '" style="cursor:pointer;user-select:none;' + (style||'') + '" onclick="sortTable(\'' + table + '\',\'' + col.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">' + label + ' <span style="font-size:.6rem;color:' + iconColor + ';">' + icon + '</span></th>';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1444,17 +1477,17 @@ function buildDrillContent(errors, total, colspan) {
 }
 
 function renderBrandAccuracy() {
-  const data = buildBrandAccuracy(filteredRows());
+  const data = applySort(buildBrandAccuracy(filteredRows()), 'brand');
   APP._pivotBrand = data;
 
   document.getElementById('baHead').innerHTML = '<tr>' +
     '<th style="width:28px;"></th>' +
-    '<th class="left" style="min-width:130px;">Brand</th>' +
+    sTh('Brand','brand','brand','left','min-width:130px;') +
     '<th class="left" style="min-width:65px;">Type</th>' +
-    '<th style="min-width:65px;">Correct</th>' +
-    '<th style="min-width:65px;">Errors</th>' +
-    '<th style="min-width:55px;">Total</th>' +
-    '<th style="min-width:110px;">Accuracy</th>' +
+    sTh('Correct','brand','correct','','min-width:65px;') +
+    sTh('Errors','brand','errorCount','','min-width:65px;') +
+    sTh('Total','brand','total','','min-width:55px;') +
+    sTh('Accuracy','brand','accuracy','','min-width:110px;') +
     '</tr>';
 
   if (!data.length) {
@@ -1524,16 +1557,16 @@ function buildVariantAccuracy(rows) {
 }
 
 function renderVariantAccuracy() {
-  const data = buildVariantAccuracy(filteredRows());
+  const data = applySort(buildVariantAccuracy(filteredRows()), 'variant');
   APP._pivotVariant = data;
 
   document.getElementById('vaHead').innerHTML = '<tr>' +
     '<th style="width:28px;"></th>' +
-    '<th class="left" style="min-width:150px;">Variant</th>' +
-    '<th style="min-width:65px;">Correct</th>' +
-    '<th style="min-width:65px;">Errors</th>' +
-    '<th style="min-width:55px;">Total</th>' +
-    '<th style="min-width:110px;">Accuracy</th>' +
+    sTh('Variant','variant','label','left','min-width:150px;') +
+    sTh('Correct','variant','correct','','min-width:65px;') +
+    sTh('Errors','variant','errorCount','','min-width:65px;') +
+    sTh('Total','variant','total','','min-width:55px;') +
+    sTh('Accuracy','variant','accuracy','','min-width:110px;') +
     '</tr>';
 
   if (!data.length) {
@@ -1599,16 +1632,17 @@ function renderSkuAccuracy() {
   const q = (APP._skuQ || '').toLowerCase();
   let data = buildSkuAccuracy(filteredRows());
   if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.brand || '').toLowerCase().includes(q); });
+  data = applySort(data, 'sku');
   APP._pivotSku = data;
 
   document.getElementById('skuHead').innerHTML = '<tr>' +
     '<th style="width:28px;"></th>' +
-    '<th class="left" style="min-width:200px;">SKU (QC Display Name)</th>' +
-    '<th class="left" style="min-width:110px;">Brand</th>' +
-    '<th style="min-width:68px;">Correct</th>' +
-    '<th style="min-width:68px;">Errors</th>' +
-    '<th style="min-width:55px;">Total</th>' +
-    '<th style="min-width:110px;">Accuracy</th>' +
+    sTh('SKU (QC Display Name)','sku','sku','left','min-width:200px;') +
+    sTh('Brand','sku','brand','left','min-width:110px;') +
+    sTh('Correct','sku','correct','','min-width:68px;') +
+    sTh('Errors','sku','errorCount','','min-width:68px;') +
+    sTh('Total','sku','total','','min-width:55px;') +
+    sTh('Accuracy','sku','accuracy','','min-width:110px;') +
     '</tr>';
 
   if (!data.length) {
@@ -1718,20 +1752,21 @@ function renderBrandDemo() {
   const filtered = q ? allRows.filter(function(r) { return r.sid.toLowerCase().includes(q); }) : allRows;
   APP.pg.bd.rows = filtered;
 
-  const total = filtered.length;
+  const sorted = applySort(filtered, 'bd');
+  const total = sorted.length;
   const pages = Math.max(1, Math.ceil(total / APP.pg.bd.size));
   APP.pg.bd.page = Math.min(APP.pg.bd.page, pages);
-  const sl = filtered.slice((APP.pg.bd.page - 1) * APP.pg.bd.size, APP.pg.bd.page * APP.pg.bd.size);
+  const sl = sorted.slice((APP.pg.bd.page - 1) * APP.pg.bd.size, APP.pg.bd.page * APP.pg.bd.size);
 
   document.getElementById('bdHead').innerHTML = '<tr>' +
-    '<th class="left s1" style="min-width:190px;">Image ID</th>' +
+    sTh('Image ID','bd','sid','left s1','min-width:190px;') +
     '<th class="left s2" style="min-width:110px;">Quality</th>' +
-    '<th style="min-width:90px;">Self Facings</th>' +
-    '<th style="min-width:110px;">Self Misclass.</th>' +
-    '<th style="min-width:95px;">Non-NARTD</th>' +
-    '<th style="min-width:75px;">Others</th>' +
-    brands.map(function(b) { return '<th style="min-width:80px;" title="' + b + '">' + (b.length > 9 ? b.slice(0,8)+'…' : b) + '</th>'; }).join('') +
-    '<th style="min-width:80px;background:#182030;">Total GT</th>' +
+    sTh('Self Facings','bd','selfFacings','','min-width:90px;') +
+    sTh('Self Misclass.','bd','selfMisclass','','min-width:110px;') +
+    sTh('Non-NARTD','bd','nonNARTD','','min-width:95px;') +
+    sTh('Others','bd','others','','min-width:75px;') +
+    brands.map(function(b) { return sTh(b.length > 9 ? b.slice(0,8)+'…' : b, 'bd', 'bc:'+b, '', 'min-width:80px;'); }).join('') +
+    sTh('Total GT','bd','total','','min-width:80px;background:#182030;') +
     '</tr>';
 
   if (!sl.length) {
@@ -1797,16 +1832,17 @@ function renderSizeDemo() {
   const filtered = q ? allRows.filter(function(r) { return r.sid.toLowerCase().includes(q); }) : allRows;
   APP.pg.sd.rows = filtered;
 
-  const total = filtered.length;
+  const sorted = applySort(filtered, 'sd');
+  const total = sorted.length;
   const pages = Math.max(1, Math.ceil(total / APP.pg.sd.size));
   APP.pg.sd.page = Math.min(APP.pg.sd.page, pages);
-  const sl = filtered.slice((APP.pg.sd.page - 1) * APP.pg.sd.size, APP.pg.sd.page * APP.pg.sd.size);
+  const sl = sorted.slice((APP.pg.sd.page - 1) * APP.pg.sd.size, APP.pg.sd.page * APP.pg.sd.size);
 
   document.getElementById('sdHead').innerHTML = '<tr>' +
-    '<th class="left s1" style="min-width:190px;">Image ID</th>' +
+    sTh('Image ID','sd','sid','left s1','min-width:190px;') +
     '<th class="left s2" style="min-width:110px;">Quality</th>' +
-    '<th style="min-width:110px;">Total Size Errors</th>' +
-    freshBrands.map(function(b) { return '<th style="min-width:80px;" title="' + b + '">' + (b.length>9?b.slice(0,8)+'…':b) + '</th>'; }).join('') +
+    sTh('Total Size Errors','sd','total','','min-width:110px;') +
+    freshBrands.map(function(b) { return sTh(b.length>9?b.slice(0,8)+'…':b, 'sd', 'bc:'+b, '', 'min-width:80px;'); }).join('') +
     '</tr>';
 
   if (!sl.length) {
@@ -2213,6 +2249,7 @@ function resetAll() {
   APP._variantExpanded = new Set();
   APP._pivotBrand = [];
   APP._pivotVariant = [];
+  APP._sort = { brand:{col:null,dir:'desc'}, variant:{col:null,dir:'desc'}, sku:{col:null,dir:'desc'}, bd:{col:null,dir:'desc'}, sd:{col:null,dir:'desc'} };
 }
 // Set date input to today on load
 (function() {

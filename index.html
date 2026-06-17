@@ -403,19 +403,25 @@
       <!-- Tab: Variant Analysis -->
       <div id="tcontent-variant" style="display:none;">
         <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-            <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy (Top 15 by Volume)
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-box" style="color:var(--violet);"></i><span id="vaTableTitle">Attribute Accuracy</span>
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(click row to drill down)</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Sorted by most volume. Expand a row to see misclassification breakdown and affected images.</div>
+            </div>
+            <div id="vaFilterBar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
           </div>
-          <div style="height:320px;"><canvas id="chart4"></canvas></div>
-        </div>
-        <div class="card">
-          <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-            <i class="fas fa-box" style="color:var(--violet);"></i>Variant Accuracy
-            <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Brand + Pack Type — click row to drill down)</span>
-          </div>
-          <div class="tbl-wrap" style="max-height:420px;">
+          <div class="tbl-wrap" style="max-height:500px;">
             <table class="tbl"><thead id="vaHead"></thead><tbody id="vaBody"></tbody></table>
           </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+            <i class="fas fa-box" style="color:var(--violet);"></i><span id="vaChartTitle">Attribute Accuracy (Top 15 by Volume)</span>
+          </div>
+          <div style="height:320px;"><canvas id="chart4"></canvas></div>
         </div>
       </div>
 
@@ -566,7 +572,11 @@ const APP = {
   _breakdownCharts: {},
   _brandAccuracyFilter: 'all',
   _brandDemoFilter: 'all',
-  _brandErrorImgExpanded: {}
+  _brandErrorImgExpanded: {},
+  _variantAccuracyFilter: 'all',
+  _variantAttrKey: '',
+  _variantGroupBy: 'brand+attr',
+  _variantErrorImgExpanded: {}
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1019,6 +1029,10 @@ async function processData() {
   APP._trendBrands = [];
   APP._trendVariants = [];
   APP._trendSkus = [];
+  APP._variantAccuracyFilter = 'all';
+  APP._variantAttrKey = '';
+  APP._variantGroupBy = 'brand+attr';
+  APP._variantErrorImgExpanded = {};
 
   const skuSearchEl = document.getElementById('skuSearch');
   if (skuSearchEl) skuSearchEl.value = '';
@@ -1213,6 +1227,9 @@ function resetFilters() {
   APP._skuExpanded = new Set();
   APP._brandExpanded = new Set();
   APP._variantExpanded = new Set();
+  APP._variantAccuracyFilter = 'all';
+  APP._variantGroupBy = 'brand+attr';
+  APP._variantErrorImgExpanded = {};
   renderAll();
 }
 
@@ -1688,40 +1705,228 @@ function renderBrandBreakdownCharts() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════
+// VARIANT / ATTRIBUTE ANALYSIS HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function getDefaultVariantAttrKey() {
+  var keys = APP.d.attrKeys || [];
+  if (keys.indexOf('Pack type') !== -1) return 'Pack type';
+  if (keys.indexOf('Variant') !== -1) return 'Variant';
+  return keys[0] || '';
+}
+
+function setVariantAccuracyFilter(val) {
+  APP._variantAccuracyFilter = val;
+  APP._variantExpanded = new Set();
+  APP._variantErrorImgExpanded = {};
+  renderVariantAccuracy();
+  renderVariantChart(filteredRows());
+}
+
+function setVariantAttrKey(key) {
+  APP._variantAttrKey = key;
+  APP._variantExpanded = new Set();
+  APP._variantErrorImgExpanded = {};
+  APP._sort.variant = { col: null, dir: 'desc' };
+  renderVariantAccuracy();
+  renderVariantChart(filteredRows());
+}
+
+function setVariantGroupBy(val) {
+  APP._variantGroupBy = val;
+  APP._variantExpanded = new Set();
+  APP._variantErrorImgExpanded = {};
+  APP._sort.variant = { col: null, dir: 'desc' };
+  renderVariantAccuracy();
+  renderVariantChart(filteredRows());
+}
+
+function buildAttrAccuracy(rows, attrKey, groupBy) {
+  if (!attrKey) return [];
+  groupBy = groupBy || 'attr';
+  const brandAttr = groupBy === 'brand+attr';
+  const map = {};
+  for (const r of rows) {
+    const gtVal = r.gt_attrs ? (r.gt_attrs[attrKey] || '') : '';
+    if (!gtVal || _isBlankVal(gtVal)) continue;
+    const gtBrand = r.gt_brand || '';
+    if (brandAttr && !gtBrand) continue;
+    const key = brandAttr ? (gtBrand + '||' + gtVal) : gtVal;
+    const label = brandAttr ? (gtBrand + ' · ' + gtVal) : gtVal;
+    if (!map[key]) map[key] = { label, correct: 0, total: 0, errors: {} };
+    map[key].total++;
+    const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
+    const predAttrVal = predEntry ? (predEntry.attrs[attrKey] || '') : '';
+    const predBrand = r.pred_brand || '';
+    const isCorrect = brandAttr
+      ? (predBrand === gtBrand && predAttrVal === gtVal)
+      : (predAttrVal === gtVal);
+    if (isCorrect) {
+      map[key].correct++;
+    } else {
+      var errKey;
+      if (brandAttr) {
+        errKey = (predBrand && predAttrVal) ? (predBrand + ' · ' + predAttrVal) : (r.pred || 'Unknown');
+      } else {
+        errKey = predAttrVal || r.pred || 'Unknown';
+      }
+      if (!map[key].errors[errKey]) map[key].errors[errKey] = { count: 0, imgs: {} };
+      map[key].errors[errKey].count++;
+      if (!map[key].errors[errKey].imgs[r.sid]) {
+        map[key].errors[errKey].imgs[r.sid] = { sid: r.sid, fp: r.fp, quality: r.quality };
+      }
+    }
+  }
+  return Object.values(map)
+    .map(function(v) {
+      return Object.assign({}, v, {
+        accuracy: v.total > 0 ? v.correct / v.total : 0,
+        errorCount: v.total - v.correct
+      });
+    })
+    .sort(function(a, b) { return b.total - a.total; });
+}
+
+function toggleVariantErrorImg(rowLabel, errorVariant) {
+  var key = rowLabel + '||' + errorVariant;
+  if (APP._variantErrorImgExpanded[key]) delete APP._variantErrorImgExpanded[key];
+  else APP._variantErrorImgExpanded[key] = true;
+  renderVariantAccuracy();
+}
+
+function buildVariantDrillContent(rowLabel, errors, total, colspan) {
+  var attrKey = APP._variantAttrKey || 'Attribute';
+  var entries = Object.entries(errors).sort(function(a, b) { return b[1].count - a[1].count; });
+
+  var tableRows = entries.map(function(entry) {
+    var errorVariant = entry[0], data = entry[1];
+    var cnt = data.count;
+    var imgKey = rowLabel + '||' + errorVariant;
+    var isImgExpanded = !!APP._variantErrorImgExpanded[imgKey];
+    var safeR = rowLabel.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var safeE = errorVariant.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    var expandIcon = '<button onclick="event.stopPropagation();toggleVariantErrorImg(\'' + safeR + '\',\'' + safeE + '\')" style="width:18px;height:18px;border-radius:3px;background:' + (isImgExpanded ? 'rgba(99,102,241,.2)' : 'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isImgExpanded ? 'var(--violet)' : 'var(--muted)') + ';font-size:.55rem;display:inline-flex;align-items:center;justify-content:center;" title="' + (isImgExpanded ? 'Hide' : 'Show') + ' images"><i class="fas fa-images"></i></button>';
+
+    var mainErrRow = '<tr style="border-bottom:1px solid rgba(31,41,55,.3);">' +
+      '<td style="text-align:left;padding:5px 8px 5px 0;font-size:.79rem;color:var(--text);white-space:nowrap;font-weight:500;">' + expandIcon + ' ' + errorVariant + '</td>' +
+      '<td style="text-align:right;padding:5px 12px;font-size:.79rem;color:var(--red);font-weight:600;">' + cnt.toLocaleString() + '</td>' +
+      '<td style="text-align:right;padding:5px 14px;font-size:.79rem;color:var(--muted);">' + (cnt / total * 100).toFixed(1) + '%</td>' +
+      '<td style="padding:5px 0 5px 4px;font-size:.72rem;color:var(--muted);">' + Object.keys(data.imgs).length.toLocaleString() + ' image' + (Object.keys(data.imgs).length !== 1 ? 's' : '') + '</td>' +
+      '</tr>';
+
+    var imgRow = '';
+    if (isImgExpanded) {
+      var allImgs = Object.values(data.imgs);
+      imgRow = '<tr><td colspan="4" style="padding:0 0 8px 24px;">' +
+        '<div style="background:rgba(99,102,241,.06);border-radius:6px;padding:10px;margin:4px 0;">' +
+        '<div style="font-size:.68rem;color:var(--muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">All affected images (' + allImgs.length + ')</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + buildImgChips(allImgs) + '</div>' +
+        '</div>' +
+        '</td></tr>';
+    }
+    return mainErrRow + imgRow;
+  }).join('');
+
+  return '<tr><td colspan="' + colspan + '" style="padding:0;">' +
+    '<div class="drill-wrap">' +
+    '<div class="drill-title"><i class="fas fa-arrow-turn-down" style="margin-right:5px;"></i>Misclassified as (' + attrKey + ') — ' + total + ' error' + (total > 1 ? 's' : '') + '</div>' +
+    '<div style="overflow-x:auto;">' +
+    '<table style="border-collapse:collapse;width:100%;">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:3px 8px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted ' + attrKey + '</th>' +
+    '<th style="text-align:right;padding:3px 12px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Count</th>' +
+    '<th style="text-align:right;padding:3px 14px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">% of Errors</th>' +
+    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Images</th>' +
+    '</tr></thead>' +
+    '<tbody>' + tableRows + '</tbody>' +
+    '</table></div></div></td></tr>';
+}
+
+function exportVariantAccuracy() {
+  var attrKey = APP._variantAttrKey || getDefaultVariantAttrKey();
+  if (!attrKey) { alert('No attribute selected.'); return; }
+  var f = APP._variantAccuracyFilter;
+  var rows = filteredRows();
+  if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
+  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
+
+  var groupBy = APP._variantGroupBy || 'brand+attr';
+  var data = buildAttrAccuracy(rows, attrKey, groupBy);
+  var esc = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var colLabel = groupBy === 'brand+attr' ? ('GT Brand · ' + attrKey) : ('GT ' + attrKey);
+  var headers = [colLabel, 'Total', 'Correct', 'Errors', 'Accuracy %', 'Predicted As', 'Error Count', '% of GT Errors', 'Image Session IDs', 'Image URLs'];
+  var csvRows = [];
+  data.forEach(function(row) {
+    var entries = Object.entries(row.errors).sort(function(a, b) { return b[1].count - a[1].count; });
+    if (!entries.length) {
+      csvRows.push([row.label, row.total, row.correct, row.errorCount, (row.accuracy * 100).toFixed(1), '', '', '', '', '']);
+      return;
+    }
+    entries.forEach(function(e) {
+      var errVariant = e[0], errData = e[1];
+      var imgs = Object.values(errData.imgs);
+      var sids = imgs.map(function(i) { return i.sid; }).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + i.fp) : ''; }).filter(Boolean).join('; ');
+      csvRows.push([row.label, row.total, row.correct, row.errorCount, (row.accuracy * 100).toFixed(1), errVariant, errData.count, row.errorCount ? (errData.count / row.errorCount * 100).toFixed(1) : '0', sids, urls]);
+    });
+  });
+  var csv = [headers.map(esc).join(',')].concat(csvRows.map(function(r) { return r.map(esc).join(','); })).join('\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = Object.assign(document.createElement('a'), { href: url, download: 'variant_accuracy.csv' });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderVariantChart(rows) {
+  var attrKey = APP._variantAttrKey || getDefaultVariantAttrKey();
+  var groupBy = APP._variantGroupBy || 'brand+attr';
+  var brandAttr = groupBy === 'brand+attr';
+  var f = APP._variantAccuracyFilter;
+  if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
+  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
+
   const vs = {};
   for (const r of rows) {
-    const b = r.gt_brand || '';
-    const v = r.gt_variant || '';
-    if (!b && !v) continue;
-    const key = b && v ? (b + ' · ' + v) : (b || v);
-    if (!vs[key]) vs[key] = { c:0, t:0 };
+    const val = attrKey && r.gt_attrs ? (r.gt_attrs[attrKey] || '') : '';
+    if (!val || _isBlankVal(val)) continue;
+    const gtBrand = r.gt_brand || '';
+    if (brandAttr && !gtBrand) continue;
+    const key = brandAttr ? (gtBrand + ' · ' + val) : val;
+    if (!vs[key]) vs[key] = { c: 0, t: 0 };
     vs[key].t++;
-    const brandMatch = r.pred_brand === b;
-    const varMatch   = v !== '' ? (r.pred_variant === v) : true;
-    if (brandMatch && varMatch) vs[key].c++;
+    const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
+    const predAttrVal = predEntry ? (predEntry.attrs[attrKey] || '') : '';
+    const predBrand = r.pred_brand || '';
+    const isCorrect = brandAttr ? (predBrand === gtBrand && predAttrVal === val) : (predAttrVal === val);
+    if (isCorrect) vs[key].c++;
   }
   const top15 = Object.entries(vs)
-    .sort(function(a,b) { return b[1].t - a[1].t; })
+    .sort(function(a, b) { return b[1].t - a[1].t; })
     .slice(0, 15);
   const labels = top15.map(function([k]) { return k; });
-  const data   = top15.map(function([,s]) { return s.t > 0 ? +(s.c/s.t*100).toFixed(1) : 0; });
-  const counts = top15.map(function([,s]) { return s.t; });
-  const colors = data.map(function(v) { return v>=90?'#10b981':v>=75?'#f59e0b':'#ef4444'; });
+  const data   = top15.map(function([, s]) { return s.t > 0 ? +(s.c / s.t * 100).toFixed(1) : 0; });
+  const counts = top15.map(function([, s]) { return s.t; });
+  const colors = data.map(function(v) { return v >= 90 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444'; });
+
+  var chartTitle = document.getElementById('vaChartTitle');
+  if (chartTitle) chartTitle.textContent = (attrKey || 'Attribute') + ' Accuracy (Top 15 by Volume)';
 
   if (APP.charts.c4) { APP.charts.c4.destroy(); APP.charts.c4 = null; }
   APP.charts.c4 = new Chart(document.getElementById('chart4'), {
-    type:'bar',
-    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:5 }] },
-    options:{
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{ callbacks:{ label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 5 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
       },
-      scales:{
-        x:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){return v+'%';} }, grid:{color:getChartDefaults().gridColor} },
-        y:{ ticks:{ color:getChartDefaults().tickColor, font:{size:10} }, grid:{display:false} }
+      scales: {
+        x: { min: 0, max: 100, ticks: { color: getChartDefaults().textColor, font: { size: 10 }, callback: function(v) { return v + '%'; } }, grid: { color: getChartDefaults().gridColor } },
+        y: { ticks: { color: getChartDefaults().tickColor, font: { size: 10 } }, grid: { display: false } }
       }
     }
   });
@@ -1984,16 +2189,62 @@ function buildVariantAccuracy(rows) {
 }
 
 function renderVariantAccuracy() {
-  const data = applySort(buildVariantAccuracy(filteredRows()), 'variant');
+  if (!APP._variantAttrKey) APP._variantAttrKey = getDefaultVariantAttrKey();
+  var attrKey = APP._variantAttrKey;
+  var f = APP._variantAccuracyFilter;
+  var groupBy = APP._variantGroupBy || 'brand+attr';
+
+  // Build filter bar
+  var filterBarEl = document.getElementById('vaFilterBar');
+  if (filterBarEl) {
+    var attrKeys = APP.d.attrKeys || [];
+    var selectOpts = attrKeys.map(function(k) {
+      return '<option value="' + k.replace(/"/g, '&quot;') + '"' + (k === attrKey ? ' selected' : '') + '>' + k + '</option>';
+    }).join('');
+    var attrSelect = attrKeys.length
+      ? '<select onchange="setVariantAttrKey(this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.74rem;cursor:pointer;">' + selectOpts + '</select>'
+      : '';
+
+    var togStyle = function(v, cur) {
+      var active = v === cur;
+      return 'padding:3px 11px;border-radius:20px;border:1px solid ' + (active ? 'var(--blue)' : 'var(--border)') + ';background:' + (active ? 'rgba(59,130,246,.15)' : 'transparent') + ';color:' + (active ? 'var(--blue)' : 'var(--muted)') + ';cursor:pointer;font-size:.72rem;font-weight:' + (active ? '600' : '400') + ';transition:all .15s;';
+    };
+    var groupByBtns = '<div style="display:flex;align-items:center;gap:3px;border:1px solid var(--border);border-radius:22px;padding:2px 4px;">' +
+      '<span style="font-size:.65rem;color:var(--muted);padding-right:4px;white-space:nowrap;">Group by:</span>' +
+      '<button style="' + togStyle('brand+attr', groupBy) + '" onclick="setVariantGroupBy(\'brand+attr\')">Brand + Attr</button>' +
+      '<button style="' + togStyle('attr', groupBy) + '" onclick="setVariantGroupBy(\'attr\')">Attr only</button>' +
+      '</div>';
+
+    var filterBtns = '<div style="display:flex;align-items:center;gap:4px;">' +
+      '<button style="' + togStyle('all', f) + '" onclick="setVariantAccuracyFilter(\'all\')">All</button>' +
+      '<button style="' + togStyle('self', f) + '" onclick="setVariantAccuracyFilter(\'self\')">Self</button>' +
+      '<button style="' + togStyle('competitor', f) + '" onclick="setVariantAccuracyFilter(\'competitor\')">Competitor</button>' +
+      '</div>';
+
+    var exportBtn = '<button class="btn btn-ghost btn-sm" onclick="exportVariantAccuracy()" style="margin-left:4px;"><i class="fas fa-download"></i> Export CSV</button>';
+    filterBarEl.innerHTML = attrSelect + groupByBtns + filterBtns + exportBtn;
+  }
+
+  // Update title
+  var titleEl = document.getElementById('vaTableTitle');
+  if (titleEl) titleEl.textContent = (attrKey || 'Attribute') + ' Accuracy';
+
+  // Apply self/competitor filter on top of sidebar filteredRows()
+  var rows = filteredRows();
+  if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
+  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
+
+  const data = applySort(buildAttrAccuracy(rows, attrKey, groupBy), 'variant');
   APP._pivotVariant = data;
 
+  var colHeader = groupBy === 'brand+attr' ? ((attrKey || 'Attribute') + ' (Brand · Attr)') : (attrKey || 'Attribute');
   document.getElementById('vaHead').innerHTML = '<tr>' +
     '<th style="width:28px;"></th>' +
-    sTh('Variant','variant','label','left','min-width:150px;') +
-    sTh('Correct','variant','correct','','min-width:65px;') +
-    sTh('Errors','variant','errorCount','','min-width:65px;') +
-    sTh('Total','variant','total','','min-width:55px;') +
-    sTh('Accuracy','variant','accuracy','','min-width:110px;') +
+    sTh(colHeader, 'variant', 'label', 'left', 'min-width:180px;') +
+    sTh('Correct', 'variant', 'correct', '', 'min-width:65px;') +
+    sTh('Errors', 'variant', 'errorCount', '', 'min-width:65px;') +
+    sTh('Total', 'variant', 'total', '', 'min-width:55px;') +
+    sTh('Accuracy', 'variant', 'accuracy', '', 'min-width:110px;') +
     '</tr>';
 
   if (!data.length) {
@@ -2006,19 +2257,19 @@ function renderVariantAccuracy() {
     const hasErrors  = row.errorCount > 0;
 
     const expandBtn = hasErrors
-      ? '<button onclick="toggleVariantDrill(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded?'rgba(245,158,11,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded?'var(--amber)':'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;"><i class="fas fa-chevron-' + (isExpanded?'down':'right') + '"></i></button>'
+      ? '<button onclick="toggleVariantDrill(' + i + ')" style="width:20px;height:20px;border-radius:4px;background:' + (isExpanded ? 'rgba(245,158,11,.2)' : 'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isExpanded ? 'var(--amber)' : 'var(--muted)') + ';font-size:.6rem;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;"><i class="fas fa-chevron-' + (isExpanded ? 'down' : 'right') + '"></i></button>'
       : '<span style="width:20px;display:inline-block;"></span>';
 
     const mainRow = '<tr' + (hasErrors ? ' onclick="toggleVariantDrill(' + i + ')" style="cursor:pointer;"' : '') + '>' +
       '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
       '<td class="left" style="font-weight:600;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + row.label + '">' + row.label + '</td>' +
       '<td style="color:var(--green);">' + row.correct.toLocaleString() + '</td>' +
-      '<td style="color:' + (hasErrors?'var(--red)':'var(--muted)') + ';font-weight:' + (hasErrors?'600':'400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
+      '<td style="color:' + (hasErrors ? 'var(--red)' : 'var(--muted)') + ';font-weight:' + (hasErrors ? '600' : '400') + ';">' + row.errorCount.toLocaleString() + '</td>' +
       '<td>' + row.total.toLocaleString() + '</td>' +
       '<td>' + accBar(row.accuracy) + '</td>' +
       '</tr>';
 
-    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(row.errors, row.errorCount, 6) : '';
+    const drillRow = (isExpanded && hasErrors) ? buildVariantDrillContent(row.label, row.errors, row.errorCount, 6) : '';
     return mainRow + drillRow;
   }).join('');
 }
@@ -2728,6 +2979,10 @@ function resetAll() {
   APP._brandAccuracyFilter = 'all';
   APP._brandDemoFilter = 'all';
   APP._brandErrorImgExpanded = {};
+  APP._variantAccuracyFilter = 'all';
+  APP._variantAttrKey = '';
+  APP._variantGroupBy = 'brand+attr';
+  APP._variantErrorImgExpanded = {};
 }
 // Set date input to today on load
 (function() {

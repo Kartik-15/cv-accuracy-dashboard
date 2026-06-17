@@ -1888,7 +1888,7 @@ function renderBrandAccuracy() {
   var f = APP._brandAccuracyFilter;
   renderFilterToggle('baFilterBar', f, 'setBrandAccuracyFilter', [
     {val:'all', label:'All'},
-    {val:'self', label:'Self (CCI)'},
+    {val:'self', label:'Self'},
     {val:'competitor', label:'Competitor'}
   ]);
   var fbEl = document.getElementById('baFilterBar');
@@ -1923,7 +1923,7 @@ function renderBrandAccuracy() {
     const isExpanded = APP._brandExpanded.has(row.brand);
     const hasErrors  = row.errorCount > 0;
     const isSelf     = row.competition === 'self';
-    const compLabel  = isSelf ? 'CCI' : (row.competition === 'competitor' ? 'Comp.' : row.competition || '—');
+    const compLabel  = isSelf ? 'Self' : (row.competition === 'competitor' ? 'Comp.' : row.competition || '—');
     const compStyle  = isSelf ? 'color:#10b981;' : 'color:var(--muted);';
 
     const expandBtn = hasErrors
@@ -2379,7 +2379,7 @@ function exportBrandAccuracy() {
   data.forEach(function(row) {
     var entries = Object.entries(row.errors).sort(function(a,b) { return b[1].count - a[1].count; });
     if (!entries.length) {
-      rows.push([row.brand, row.competition === 'self' ? 'CCI' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), '', '', '', '', '']);
+      rows.push([row.brand, row.competition === 'self' ? 'Self' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), '', '', '', '', '']);
       return;
     }
     entries.forEach(function(e) {
@@ -2387,7 +2387,7 @@ function exportBrandAccuracy() {
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
       var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + i.fp) : ''; }).filter(Boolean).join('; ');
-      rows.push([row.brand, row.competition === 'self' ? 'CCI' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), errBrand, errData.count, row.errorCount ? (errData.count/row.errorCount*100).toFixed(1) : '0', sids, urls]);
+      rows.push([row.brand, row.competition === 'self' ? 'Self' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), errBrand, errData.count, row.errorCount ? (errData.count/row.errorCount*100).toFixed(1) : '0', sids, urls]);
     });
   });
 

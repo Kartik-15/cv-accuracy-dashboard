@@ -17,7 +17,7 @@ Deployment: GitHub Pages, served from `main` branch root. `.nojekyll` file preve
 
 | File | Status | Note |
 |------|--------|------|
-| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~2450+ lines) |
+| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~2600+ lines) |
 | `.nojekyll` | **ACTIVE** | Required for GitHub Pages to serve `index.html` directly |
 | `CGC_New_15th June.csv` | **ACTIVE** | Canonical masterdata sample (CGC pivot format) |
 | `Accuracy Sheet.xlsx` | **ACTIVE** | Sample detection data (use `Raw` sheet) |
@@ -52,30 +52,35 @@ Core accuracy analysis + trend tracking is feature-complete. The next major feat
 2. **Model ID + Date inputs** — Entered before processing; stored per-run for trend tracking. Date defaults to today on page load.
 3. **Flexible column mapping modal** — auto-detects column names via candidate list matching; users can override via dropdown before processing. Handles XLSX sheet selection.
 4. **Quality normalization** — maps varied strings ("Good Quality", "Blurred image", "blank image") to canonical tiers: Good / Average / Poor / Blank / Blurred / Impossible / Unknown.
-5. **Masterdata pivot parsing** — converts CGC-format rows (`class_name`, `attribute_name`, `attribute_value`) into a flat `displayName → {brand, variant, measure, subcat, competition}` lookup map.
-6. **Enriched bounding-box rows** — joins quality and masterdata attributes onto each detection row; computes `is_correct` fresh from GT vs Prediction string equality.
-7. **Headline stat cards** — Images, Unique Brands, Unique Variants, Unique Groups (subcats). Always visible at top of dashboard, filter-reactive.
+5. **Masterdata pivot parsing** — converts CGC-format rows (`class_name`, `attribute_name`, `attribute_value`) into a flat `displayName → {brand, variant, measure, subcat, group, class_name, competition, attrs}` lookup map. Now also captures `group_name` attribute and `class_name` pivot key.
+6. **Enriched bounding-box rows** — joins quality and masterdata attributes onto each detection row; computes `is_correct` fresh from GT vs Prediction string equality. Each row now carries `gt_group` and `gt_class` from masterdata.
+7. **Headline stat cards** — 5 cards: Images, Unique Brands, Unique Groups (from `group_name` masterdata attr), Unique Classes (from `class_name` pivot column), Unique SKUs (unique GT Display Names matched to masterdata). Always visible at top of dashboard, filter-reactive.
 8. **KPI cards** — Object Accuracy, Macro Precision, Macro Recall, Macro F1 with color-coded threshold badges (≥90% emerald, 75–89% amber, <75% red).
 9. **Multi-tab layout** — 5 main tabs: Overview, Brand Analysis, Variant Analysis, SKU Analysis, Trends. Brand Demo is embedded at the bottom of Brand Analysis; Size Demo is embedded at the bottom of SKU Analysis.
 10. **Lazy tab rendering** — only the active tab's charts/tables re-render on filter change, avoiding hidden-canvas sizing bugs.
 11. **Overview tab** — Accuracy by Image Quality chart (c1) + Brand/Variant/SKU top-10 grouped bar (c2).
-12. **Brand Analysis tab** — Top-15 horizontal bar chart (c3) + brand accuracy pivot with click-to-expand drill-down. Drill-down shows predicted brand names (aggregated), error counts, % of errors, and up to 6 inline image chip links per brand.
+12. **Brand Analysis tab** — Top-15 horizontal bar chart (c3) + brand accuracy pivot with click-to-expand drill-down + **breakdown charts** (see item 22) + Brand Demo card.
 13. **Variant Analysis tab** — Top-15 horizontal bar chart (c4) + variant accuracy pivot with same drill-down structure as Brand.
 14. **SKU Analysis tab** — SKU accuracy table sorted by error count descending, with click-to-expand misclassification drill-down (same brand-level aggregation + image chips).
 15. **Brand Demo card** (inside Brand Analysis tab) — Image-level aggregation for CCI (self) GT items only. Top-15 competitor brands by actual error frequency (dynamic from filtered data), not all masterdata brands. Paginated (25/page), searchable, CSV exportable. All columns sortable.
 16. **Size Demo card** (inside SKU Analysis tab) — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable. All columns sortable.
 17. **Trends tab** — Historical KPI line chart (c5), Brand accuracy trend selector + chart (c6), Variant accuracy trend selector + chart (c7), SKU accuracy trend selector + chart (c8). History table with per-run delete + Clear All. Data persisted in localStorage under key `cci_accuracy_history_v1`.
-18. **Sidebar filters** — Fully dynamic from masterdata attributes. One filter section per attribute key (`Brand`, `Pack type`, `Variant`, `Sub category`, `measure`, etc.) plus Image Quality. All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button.
+18. **Sidebar filters** — Fully dynamic from masterdata attributes. One filter section per attribute key (`Brand`, `Pack type`, `Variant`, `Sub category`, `measure`, etc.) plus Image Quality. All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button. Empty/unknown/N/A values excluded from all filter lists via `_isBlankVal()`.
 19. **Configurable filter section picker** — Pill buttons at top of sidebar toggle which attribute filter sections are visible. Preference saved to localStorage (`cci_filter_sections_v2`). Default visible: Image Quality + Brand.
 20. **Sortable columns** — All tables (Brand Accuracy, Variant Accuracy, SKU Accuracy, Brand Demo, Size Demo) have clickable column headers. First click = descending; second click = ascending; click new column = switch. Sort state lives in `APP._sort`.
-21. **Light/dark theme toggle** — Sun/moon button in top bar and upload screen. Saves to localStorage (`cci_theme`). CSS custom properties used throughout; `getChartDefaults()` returns chart colors matching current theme.
-19. **Image viewer links** — session IDs in drill-downs rendered as `.img-chip` elements linking to `https://view.shelfwatch.io?url={file_path}` with quality badge overlay.
+21. **Light/dark theme toggle** — Sun/moon button in top bar and upload screen. Saves to localStorage (`cci_theme`). CSS custom properties used throughout; `getChartDefaults()` returns chart colors matching current theme. All inline hardcoded colors replaced with CSS variables (`--section-label`, `--code-bg`, `--code-text`, etc.).
+22. **Breakdown brand accuracy charts** — On the Brand Analysis tab, checking any filter value (e.g. "Good" in Image Quality, or "PET" in Pack type) renders one Brand Accuracy Top-15 chart per checked value. All charts in the group share the same brand order (global top-15 by combined volume) so bars align for direct comparison. Charts only render when a checkbox is checked; disappear when all are unchecked.
+23. **Brand/Variant accuracy correctness** — Brand accuracy counts a prediction as correct when `pred_brand === gt_brand` (not exact SKU match). Variant accuracy counts correct when both brand and variant match. SKU accuracy still uses exact `is_correct`. "Unknown" rows (unmatched GT) excluded from all accuracy tables.
+24. **Image viewer links** — session IDs in drill-downs rendered as `.img-chip` elements linking to `https://view.shelfwatch.io?url={file_path}` with quality badge overlay.
 
 ### Current Status
-**Deployed** at https://kartik-15.github.io/cv-accuracy-dashboard/ — shareable with the CCI team. All core features including trend tracking are live.
+**Deployed** at https://kartik-15.github.io/cv-accuracy-dashboard/ — shareable with the CCI team. All core features including trend tracking, dynamic filters, breakdown charts, and light/dark theme are live.
 
 ### Key Constraints and Non-Obvious Rules
 - `is_correct` is **always recomputed** as `QC_Display Name === Display Name` string equality. The `DN_Acc` column in the XLSX is deliberately ignored — it was found to be unreliable.
+- **Brand accuracy uses `pred_brand === gt_brand`**, not `is_correct`. Same-brand wrong-SKU is correct at brand level.
+- **Variant accuracy uses `pred_brand === gt_brand && pred_variant === gt_variant`** (with fallback when gt_variant is empty).
+- **SKU accuracy uses exact `is_correct`** — the only level where exact Display Name match is the right metric.
 - The `competition` column in the Raw detection sheet reflects the **prediction's** competition type, not the GT item's. GT competition must be looked up from the masterdata map.
 - Brand Demo only includes bounding boxes where the **GT item is 'self'** (CCI brand).
 - In Brand Demo, items with an unknown `pred_brand` fall into the **Others** bucket.
@@ -86,6 +91,7 @@ Core accuracy analysis + trend tracking is feature-complete. The next major feat
 - CSV export prepends a UTF-8 BOM (`﻿`) so Excel opens it without encoding issues.
 - The Detection Data XLSX defaults to the `Raw` sheet if it exists; otherwise falls back to the first sheet.
 - Trend data persists across page loads in localStorage but is cleared if the user manually clears browser storage.
+- `_isBlankVal(v)` is the universal check for empty/placeholder values — used in filter list building and table row skipping. Catches: `''`, `'unknown'`, `'n/a'`, `'#n/a'`, `'-'`, `'null'`, `'none'`, `'na'` (case-insensitive).
 
 ---
 
@@ -99,15 +105,24 @@ const is_correct = gt !== '' && gt === pred;
 // cl() = v => String(v).trim()
 ```
 
+### Accuracy Level Definitions
+```
+SKU-level correct:     is_correct === true  (exact Display Name match)
+Brand-level correct:   pred_brand === gt_brand
+Variant-level correct: pred_brand === gt_brand && (gt_variant === '' || pred_variant === gt_variant)
+```
+
 ### Masterdata Map Build (`buildMasterdataMap`)
 ```js
 // Input: CGC pivot rows [{class_name, attribute_name, attribute_value, competition}]
-// Output: { "display name lowercase": {brand, variant, measure, subcat, competition} }
+// Output: { "display name lowercase": {brand, variant, measure, subcat, group, class_name, competition, attrs} }
 
 for each row:
-  group by class_name → collect attribute_name:attribute_value pairs
+  group by class_name (cname) → collect attribute_name:attribute_value pairs
   look up "Display Name" (or "display_name") attribute → use as the map key
-  extract: Brand, Pack type (→ variant), measure (→ int ml), Sub category, competition
+  extract: Brand, Pack type (→ variant), measure (→ int ml), Sub category,
+           group_name (→ group), class_name (→ cname), competition
+  store all remaining attrs in entry.attrs for dynamic filters
 ```
 
 ### Quality Normalization (`normalizeQuality`)
@@ -160,6 +175,18 @@ Object Accuracy = correct / total_rows
 // Up to 6 img chips per brand row (via buildImgChips)
 ```
 
+### Breakdown Charts Logic (`renderBrandBreakdownCharts`)
+```js
+// Triggered when any filter checkbox is checked
+// For each active filter section with checked values:
+//   - Get selected values from APP.f.qualities or APP.f.attrs[attrName]
+//   - For each selected value, filter APP.d.rows to that value only
+//   - Compute _brandStats() per sub-chart
+//   - Compute globalOrder: top-15 brands by combined volume across all checked values
+//   - Render one chart per checked value, all using globalOrder for consistent y-axis
+// Charts stored in APP._breakdownCharts; destroyed before each re-render
+```
+
 ### Top Competitor Brands for Brand Demo (`getTopCompetitorBrandsForDemo`)
 ```js
 // Counts competitor brand predictions for self-GT error rows in filtered data
@@ -186,7 +213,7 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 3. `buildMasterdataMap` completes → `APP.d.mMap` populated
 4. `buildQualityMap` completes → `APP.d.qMap` populated
 5. `enrichRows` completes → `APP.d.rows` populated
-6. Unique filter values extracted
+6. Unique filter values extracted (with `_isBlankVal` exclusions applied)
 7. `renderAll()` called → `saveSnapshot()` called after render
 
 **Stop conditions:** Missing required column mapping → alert, abort. File parse error → alert, abort.
@@ -220,7 +247,7 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 │  buildMasterdataMap(md rows, cols) → APP.d.mMap      │
 │  buildQualityMap(iq rows, cols)    → APP.d.qMap      │
 │  enrichRows(det rows, qMap, mMap)  → APP.d.rows      │
-│  extract unique filter values                        │
+│  extract unique filter values (_isBlankVal excluded) │
 │  renderAll() → saveSnapshot()                        │
 └──────────────┬───────────────────────────────────────┘
                │
@@ -230,13 +257,14 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 │                                                      │
 │  filteredRows()  ← sidebar filter state (APP.f)     │
 │       │                                              │
-│       ├─ renderHeadlineStats() → 4 stat cards        │
+│       ├─ renderHeadlineStats() → 5 stat cards        │
 │       ├─ renderKPIs()          → 4 KPI cards         │
 │       ├─ renderFilters()       → sidebar update      │
 │       └─ renderActiveTabContent(rows)                │
 │             │                                        │
 │             ├─ overview:   c1 (quality bar), c2 (brand bar)
-│             ├─ brand:    c3 (top-15 bar) + pivot + drill-downs + Brand Demo card
+│             ├─ brand:    c3 (top-15 bar) + breakdown charts
+│             │             + pivot + drill-downs + Brand Demo card
 │             ├─ variant:  c4 (top-15 bar) + pivot + drill-downs
 │             ├─ sku:      SKU accuracy table + drill-downs + Size Demo card
 │             └─ trends:   c5 (KPI), c6 (brand), c7 (variant), c8 (SKU)
@@ -259,14 +287,17 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
   gt_brand:     string,   // Brand of GT item (from masterdata)
   gt_variant:   string,   // Pack type of GT item (from masterdata)
   gt_measure:   number,   // Size in ml of GT item (int, 0 if unknown)
+  gt_group:     string,   // group_name of GT item (from masterdata 'group_name' attr)
+  gt_class:     string,   // class_name of GT item (masterdata pivot key)
   gt_comp:      string,   // 'self'|'competitor' — GT item's competition (from masterdata)
+  gt_attrs:     object,   // all raw masterdata attrs for GT item (for dynamic filters)
   pred_brand:   string,   // Brand of predicted item (from masterdata)
   pred_variant: string,   // Pack type of predicted item
   pred_measure: number    // Size in ml of predicted item
 }
 
 // Masterdata map (APP.d.mMap)
-{ "display name lowercase": { brand, variant, measure, subcat, competition } }
+{ "display name lowercase": { brand, variant, measure, subcat, group, class_name, competition, attrs:{} } }
 
 // Quality map (APP.d.qMap)
 Map<sessionId: string, quality: string>
@@ -293,6 +324,8 @@ APP = {
   d: {
     rows, qMap, mMap,
     brands, qualities, variants, measures, subcats,
+    attrKeys: string[],               // sorted list of all masterdata attribute keys
+    attrValues: { [key]: string[] },  // unique non-blank values per attribute
     modelId: string,
     date: string
   },
@@ -303,6 +336,7 @@ APP = {
   charts: { c1, c2, c3, c4, c5, c6, c7, c8 },
   _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
   _visibleFilterSections: Set,  // loaded from localStorage 'cci_filter_sections_v2'
+  _breakdownCharts: {},         // Chart.js instances for brand breakdown charts; keyed by canvas id
   _sdBrands: [],           // brands with size errors (dynamic, side-effect of buildSizeDemoRows)
   _skuExpanded: Set,       // expanded SKU drill-down rows
   _skuQ: string,           // SKU search query
@@ -315,30 +349,29 @@ APP = {
   _pivotBrand: [],         // current brand pivot data
   _pivotVariant: []        // current variant pivot data
 }
-
-// APP.d also includes:
-APP.d.attrKeys  = string[]  // sorted list of all masterdata attribute keys (excl. Display Name, competition)
-APP.d.attrValues = { [key]: string[] }  // unique values per attribute, numeric-sorted where possible
 ```
 
 ### File/Module Map
 
 ```
 Accuracy Dashboard/
-├── index.html                    ACTIVE — entire app (HTML + CSS + JS, ~2200+ lines)
-│   ├── CSS (.main-tab, .main-tab.active, .drill-wrap, .img-chip, .hstat* classes added)
+├── index.html                    ACTIVE — entire app (HTML + CSS + JS, ~2600+ lines)
+│   ├── CSS (.main-tab, .main-tab.active, .drill-wrap, .img-chip, .hstat* classes;
+│   │        CSS vars: --section-label, --code-bg, --code-text added for light mode)
 │   ├── Upload Screen (#uploadScreen)
 │   │   └── Model ID input + Date picker (before Process button)
 │   ├── Column Mapping Modal (#mappingModal)
 │   ├── Processing Overlay (#procOverlay)
 │   ├── Dashboard (#dashboard)
 │   │   ├── Top bar (model ID + date + images + quality-matched stats, re-upload, theme toggle)
-│   │   ├── Headline stat cards (Images, Brands, Variants, Groups)
+│   │   ├── Headline stat cards (Images, Brands, Groups, Classes, SKUs)
 │   │   ├── Main tab nav (Overview | Brand | Variant | SKU | Trends)
 │   │   ├── Sidebar (filter section picker pills + dynamic attribute filter sections)
 │   │   └── Tab content divs (one per main tab, hidden/shown)
+│   │       └── Brand tab: #brandBreakdownCharts div between main chart and accuracy table
 │   └── JavaScript
 │       ├── APP state object
+│       ├── _BLANK_VALS / _isBlankVal(v)  — universal empty-value guard
 │       ├── HISTORY_KEY + localStorage trend persistence
 │       ├── File staging & drag-drop
 │       ├── parseXLSX / parseCSV / parseFileAuto
@@ -347,18 +380,22 @@ Accuracy Dashboard/
 │       ├── buildTabHTML / switchTab / openMappingModal
 │       ├── processData (pipeline orchestrator; reads modelId/date; calls saveSnapshot)
 │       ├── buildMasterdataMap / buildQualityMap / enrichRows
-│       ├── filteredRows / renderFilters / toggleFilter / toggleAttrFilter
-│       ├── loadFilterSections / buildFilterSectionDefs / getAttrStyle / renderFilterSectionPicker
+│       ├── filteredRows / filteredRowsExcept(excludeKey)
+│       ├── renderFilters / toggleFilter / toggleAttrFilter
+│       ├── loadFilterSections / buildFilterSectionDefs / getAttrStyle
 │       ├── sortTable / applySort / sTh  (sortable column helpers)
-│       ├── getChartDefaults()  (replaces CHART_DEFAULTS const; theme-aware)
+│       ├── getChartDefaults()  (theme-aware chart colors; replaces old CHART_DEFAULTS const)
 │       ├── applyTheme / toggleTheme / initTheme
 │       ├── computeMetrics
 │       ├── renderHeadlineStats / renderKPIs
 │       ├── MAIN_TABS / switchMainTab / renderActiveTabContent
 │       ├── renderChart1 (quality bar, c1) / renderChart2 (brand bar, c2)
 │       ├── getPredBrandLabel (maps pred row → brand label)
-│       ├── buildBrandAccuracy / renderBrandAccuracy / renderChart3 (c3)
-│       ├── buildVariantAccuracy / renderVariantAccuracy / renderChart4 (c4)
+│       ├── _brandStats(rows)  — brand stats map helper for breakdown charts
+│       ├── buildBrandAccuracy / renderBrandAccuracy / renderBrandChart (c3)
+│       ├── renderBrandSubChart(canvasId, rows, fixedLabels)
+│       ├── renderBrandBreakdownCharts()
+│       ├── buildVariantAccuracy / renderVariantAccuracy / renderVariantChart (c4)
 │       ├── buildSkuAccuracy / renderSkuAccuracy / toggleSkuDrillIdx
 │       ├── buildDrillContent (errors, total, colspan) / buildImgChips
 │       ├── getTopCompetitorBrandsForDemo / buildBrandDemoRows / renderBrandDemo
@@ -371,7 +408,7 @@ Accuracy Dashboard/
 │       ├── renderVariantTrendSelector / renderVariantTrendChart (c7)
 │       ├── renderSkuTrendSelector / renderSkuTrendChart (c8)
 │       ├── toggleTrendItem(type, item)
-│       └── resetAll (destroys c1–c8, resets all trend/expand state)
+│       └── resetAll (destroys c1–c8 + _breakdownCharts, resets all trend/expand state)
 ├── .nojekyll                     ACTIVE — GitHub Pages bypass (empty file)
 ├── Accuracy Sheet.xlsx           Sample detection data (use "Raw" sheet)
 ├── CCI_Image_Quality_Analysis - 12th June - Sheet1.csv   Sample quality file
@@ -431,12 +468,13 @@ Before clicking Process, enter:
 
 ### Headline Stats (always visible, filter-reactive)
 
-| Card | Value |
-|------|-------|
-| Images | Distinct `session_id` values in filtered rows |
-| Unique Brands | Distinct `gt_brand` values |
-| Unique Variants | Distinct `gt_variant` values |
-| Unique Groups | Distinct `gt_subcat` values |
+| Card | Value | Source |
+|------|-------|--------|
+| Images | Distinct `session_id` values in filtered rows | Detection data |
+| Unique Brands | Distinct `gt_brand` values in filtered rows | masterdata `Brand` attr |
+| Unique Groups | Distinct `gt_group` values in filtered rows | masterdata `group_name` attr |
+| Unique Classes | Distinct `gt_class` values in filtered rows | masterdata `class_name` pivot column |
+| Unique SKUs | Distinct `r.gt` values where `r.gt_class` is non-empty | masterdata Display Names |
 
 ### Drill-Down Output (Brand / Variant / SKU tabs)
 Each row in the accuracy pivot table is clickable. Expanding shows:
@@ -532,6 +570,20 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **15. Light/dark theme via CSS custom properties + body.light class**
 - `body.light` block in CSS overrides all `--var` values. JS only toggles the class + updates button icon. Chart colors handled by `getChartDefaults()` returning theme-appropriate values each time charts are created (charts are destroyed/recreated on tab switch anyway).
 
+**16. Brand/variant accuracy uses brand-level match, not exact SKU match**
+- **Decision:** Brand accuracy = `pred_brand === gt_brand`; variant accuracy = brand + variant both match; SKU accuracy = `is_correct`.
+- **Reasoning:** "THUMS UP 250ml predicted as THUMS UP 500ml" is correct at brand level — the model identified the right brand. Only SKU-level accuracy should penalize wrong-size within same brand.
+- **Effect:** Same-brand wrong-SKU errors disappear from brand drill-downs; brand accuracy numbers increase to reflect true brand identification rate.
+
+**17. Breakdown charts trigger on checked values, not visible filter sections**
+- **Decision:** `renderBrandBreakdownCharts()` only fires when `APP.f.qualities.length > 0` or `APP.f.attrs[x].length > 0`. One chart per checked value, not per section value.
+- **Reasoning:** Showing all values of every visible filter section by default would clutter the brand tab. Charts appear on demand when the user is actively comparing slices.
+- **Shared order:** Global top-15 brand order computed from combined volume across all checked values; all charts in a group use this order for direct bar-to-bar comparison.
+
+**18. `_isBlankVal` as universal empty-value guard**
+- **Decision:** Module-level `_BLANK_VALS` Set + `_isBlankVal(v)` applied at three points: `processData` (attrValMap build + qualities list), `buildFilterSectionDefs` (final guard before render), and all three accuracy table builders (skip rows with blank gt_brand/variant/sku).
+- **Reasoning:** Empty, 'Unknown', '#N/A', '-' values were appearing as filter checkboxes and table rows. Centralizing the check avoids repetition and ensures consistency.
+
 ---
 
 ## Section 7: Bugs & Corrections
@@ -551,7 +603,6 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **5. `buildDrillContent` signature mismatch after error structure refactor**
 - **Problem:** After changing the error accumulator to embed imgs inside each brand key and dropping the separate `errorImgs` arg, all 3 callers (brand, variant, SKU) still passed 4 arguments.
 - **Fix:** Updated all 3 callers to `buildDrillContent(row.errors, row.errorCount, colspan)`.
-- **When fixed:** During the drill-down + image chips improvement session.
 
 **6. Chart.js canvas sizing in hidden tabs**
 - **Problem:** Charts rendered into hidden `<div>` (display:none) tabs showed as 0×0 or wrong size.
@@ -560,6 +611,18 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **7. Stuck-at-rendering overlay after dynamic attrs refactor**
 - **Problem:** `processData()` reset `APP.f = { qualities:[], brands:[], variants:[], measures:[] }` (missing `attrs:{}`). This overwrote `APP.f.attrs = {}` set earlier. `filteredRows()` called `Object.entries(undefined)` and threw, leaving the overlay stuck.
 - **Fix:** Changed reset to `APP.f = { qualities:[], brands:[], variants:[], measures:[], attrs:{} }`.
+
+**8. Brand/variant accuracy inflated by same-brand wrong-SKU errors**
+- **Problem:** `buildBrandAccuracy` used `r.is_correct` (exact Display Name match) to count "correct". "THUMS UP 250ml predicted as THUMS UP 500ml" was counted as an error for the THUMS UP brand, making brand accuracy artificially low. In the drill-down, THUMS UP appeared as its own top misclassification target.
+- **Fix:** Brand accuracy now uses `r.pred_brand === brand`; variant accuracy uses `pred_brand === b && pred_variant === v`. SKU accuracy unchanged.
+
+**9. Unique SKUs headline count inflated by unmatched GT display names**
+- **Problem:** `renderHeadlineStats` counted all unique `r.gt` values, including GT labels with no masterdata match (so `r.gt_class` is empty). This made Unique SKUs > Unique Classes, which is impossible if every class maps to one display name.
+- **Fix:** Count only rows where `r.gt_class` is non-empty: `rows.filter(r => r.gt_class).map(r => r.gt.toLowerCase())`.
+
+**10. Unknown/empty values appearing in filter sidebar and accuracy tables**
+- **Problem:** Image Quality filter showed "Unknown" (fallback for unmatched session IDs); attribute filters could contain empty or placeholder values from masterdata; accuracy tables had an "Unknown" row for GT items with no masterdata match.
+- **Fix:** Added `_isBlankVal()` guard at processData build time, at `buildFilterSectionDefs` render time, and in all three accuracy table builders (`buildBrandAccuracy`, `buildVariantAccuracy`, `buildSkuAccuracy`).
 
 ---
 
@@ -615,13 +678,16 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 ## Section 10: Preferences & Conventions
 
 - **Single-file architecture is intentional.** Distributed by sharing `index.html` or the GitHub Pages URL. No build tools, no npm, no bundling. Libraries loaded from CDN (Tailwind, FontAwesome, PapaParse, Chart.js, SheetJS).
-- **Dark theme is default**; light theme togglable via sun/moon button. CSS custom properties used throughout — no hardcoded dark colors in HTML.
+- **Dark theme is default**; light theme togglable via sun/moon button. CSS custom properties used throughout — no hardcoded dark colors in HTML. New variables `--section-label`, `--code-bg`, `--code-text` added in session 4.
 - **Table columns: right-align numbers, left-align labels** — enforced via `.left` class. Don't deviate.
 - **KPI color thresholds are hardcoded**: ≥90% = green, 75–89% = amber, <75% = red. Business-defined, not configurable.
 - **`cl()` is the universal cell normalizer** — always use `cl(row[colName])` when reading detection data. It handles null/undefined/whitespace.
+- **`_isBlankVal(v)` is the universal empty-value check** — use for filter items and table row guards. Never add ad-hoc empty-string or 'Unknown' checks elsewhere; route through this function.
+- **Accuracy level semantics**: brand = `pred_brand === gt_brand`; variant = brand + variant match; SKU = `is_correct`. Do not conflate these.
 - **Chart.js instances c1–c8 are destroyed and recreated** each time their tab activates. `APP.charts.cN.destroy()` before creating new. Don't skip this or you'll leak canvas contexts.
+- **`APP._breakdownCharts` stores breakdown chart instances** — always destroy all entries before re-rendering breakdown charts. `resetAll()` also destroys them.
 - **`getChartDefaults()` replaces the old `CHART_DEFAULTS` const** — it's a function that reads `document.body.classList.contains('light')` to return theme-appropriate colors. Always call it fresh when constructing a chart config, never cache the result.
-- **`resetAll()` destroys c1–c8** and resets all expand sets and trend selection arrays when re-uploading.
+- **`resetAll()` destroys c1–c8 and `_breakdownCharts`** and resets all expand sets and trend selection arrays when re-uploading.
 - **Pagination state resets to 1** whenever filters change or new data is processed.
 - **`APP._sdBrands` is a side-effect of `buildSizeDemoRows`** — set inside that function; always call `buildSizeDemoRows` before reading `APP._sdBrands`.
 - **CSV export prepends UTF-8 BOM** (`﻿`) — intentional for Excel on Windows.
@@ -648,6 +714,13 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2025 | Dynamic attribute filters: all masterdata attrs stored in entry.attrs; one filter section per attr key; filteredRows() filters on r.gt_attrs; fixed stuck-at-rendering bug (attrs:{} missing from APP.f reset) |
 | June 2025 | Light/dark theme toggle: body.light class + CSS custom properties; getChartDefaults() replaces CHART_DEFAULTS const; sun/moon button on upload screen and top bar; preference saved to localStorage (cci_theme) |
 | June 2025 | USER_GUIDE.md created; HANDOFF.md updated to reflect session 3 changes |
+| June 2026 | **Session 4:** Headline stats overhauled — removed Unique Variants, Groups now from `group_name` attr, added Unique Classes (class_name pivot key), added Unique SKUs (masterdata-matched GT display names); grid expanded to 5 columns |
+| June 2026 | Masterdata map extended: `buildMasterdataMap` now captures `cname` (class_name) and `group_name` attr; enriched rows gain `gt_group` and `gt_class` fields |
+| June 2026 | Light mode readability comprehensive fix: new CSS vars `--section-label`, `--code-bg`, `--code-text`; darkened `--border` and `--muted` in light; replaced all hardcoded light/dark hex colors with CSS vars across all inline styles |
+| June 2026 | Brand/variant accuracy correctness fix: brand accuracy = `pred_brand === gt_brand`; variant = brand + variant match; SKU unchanged; same-brand wrong-SKU no longer counted as brand-level error; brand drill-down cleaned |
+| June 2026 | Breakdown brand accuracy charts: `renderBrandBreakdownCharts()`, `renderBrandSubChart()`, `_brandStats()` added; `APP._breakdownCharts` added to state; charts appear only when filter checkboxes are checked; one chart per checked value; shared brand order for cross-chart comparison |
+| June 2026 | Empty/unknown value purge: `_BLANK_VALS` + `_isBlankVal()` added; applied at processData build time, buildFilterSectionDefs render time, and all three accuracy table builders; "Unknown" row removed from all tables |
+| June 2026 | HANDOFF.md updated for session 4 |
 
 ---
 
@@ -675,8 +748,11 @@ INPUTS (3 file upload slots + model ID + date):
 
 KEY RULES:
   - is_correct = (QC_Display Name === Display Name) — always recomputed, never from file
+  - ACCURACY LEVELS: brand = pred_brand===gt_brand; variant = brand+variant match; SKU = is_correct
   - competition column in Raw = PREDICTION's type; GT competition from masterdata only
   - Masterdata keys: displayName.toLowerCase()
+  - Masterdata map now includes: group (from group_name attr), class_name (pivot key)
+  - Enriched rows include: gt_group (group_name), gt_class (class_name)
   - Quality normalization: "Good Quality"→"Good", "Blurred image"→"Blurred", etc.
   - Brand Demo: GT 'self' items only; top-15 competitor columns by error frequency (dynamic)
   - Size Demo: same-brand, different-measure errors only (both measures non-zero)
@@ -685,7 +761,10 @@ KEY RULES:
   - buildDrillContent(errors, total, colspan) — 3 args; errors = { brandName: { count, imgs:{} } }
   - Trend snapshots saved to localStorage key 'cci_accuracy_history_v1' after each processData()
   - Lazy tab rendering: renderActiveTabContent() called on switchMainTab()
-  - Chart instances c1–c8; all destroyed in resetAll()
+  - Chart instances c1–c8 + _breakdownCharts; all destroyed in resetAll()
+  - _isBlankVal(v): universal empty-value check — applied to filter lists and table row guards
+  - Breakdown charts: only when filter checkboxes checked; one chart per checked value;
+    shared globalOrder (top-15 by combined volume) for all charts in a group
 
 APP STATE:
 APP = {
@@ -698,6 +777,7 @@ APP = {
   charts: { c1, c2, c3, c4, c5, c6, c7, c8 },
   _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
   _visibleFilterSections: Set,
+  _breakdownCharts: {},   // Chart.js instances for brand breakdown charts
   _sdBrands, _skuExpanded, _skuQ, _pivotSku,
   _trendBrands, _trendVariants, _trendSkus,
   _brandExpanded, _variantExpanded, _pivotBrand, _pivotVariant
@@ -708,7 +788,11 @@ FILTER_SECTIONS_KEY = 'cci_filter_sections_v2'
 THEME_KEY = 'cci_theme'
 HISTORY_KEY = 'cci_accuracy_history_v1'
 
-CURRENT STATUS: Core features + trend tracking + dynamic filters + sortable tables + light/dark theme complete. Deployed to GitHub Pages.
+HEADLINE STATS (5 cards): Images | Unique Brands | Unique Groups (group_name attr) |
+  Unique Classes (class_name pivot) | Unique SKUs (masterdata-matched GT display names)
+
+CURRENT STATUS: Core features + trend tracking + dynamic filters + sortable tables +
+light/dark theme + breakdown charts + brand/variant accuracy fix deployed to GitHub Pages.
 NEXT FEATURE: MSL — 4th file upload slot, join on store/session ID, compliance columns in Size Demo.
 
 SAMPLE DATA FILES in same folder:

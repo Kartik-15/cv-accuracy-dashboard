@@ -358,52 +358,29 @@
 
       <!-- Main tab bar -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;">
-        <button class="main-tab active" id="mtab-overview"  onclick="switchMainTab('overview')"><i class="fas fa-chart-line" style="margin-right:6px;"></i>Overview</button>
-        <button class="main-tab"        id="mtab-brand"     onclick="switchMainTab('brand')"><i class="fas fa-tag" style="margin-right:6px;"></i>Brand Analysis</button>
+        <button class="main-tab active" id="mtab-brand"     onclick="switchMainTab('brand')"><i class="fas fa-tag" style="margin-right:6px;"></i>Brand Analysis</button>
         <button class="main-tab"        id="mtab-variant"   onclick="switchMainTab('variant')"><i class="fas fa-box" style="margin-right:6px;"></i>Variant Analysis</button>
         <button class="main-tab"        id="mtab-sku"       onclick="switchMainTab('sku')"><i class="fas fa-microscope" style="margin-right:6px;"></i>SKU Analysis</button>
 
         <button class="main-tab"        id="mtab-trends"    onclick="switchMainTab('trends')"><i class="fas fa-chart-line" style="margin-right:6px;"></i>Trends</button>
       </div>
 
-      <!-- Tab: Overview -->
-      <div id="tcontent-overview">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-          <div class="card">
-            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-              <i class="fas fa-layer-group" style="color:var(--blue);"></i>Accuracy by Image Quality
-            </div>
-            <div style="height:210px;"><canvas id="chart1"></canvas></div>
-          </div>
-          <div class="card">
-            <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-              <i class="fas fa-tags" style="color:var(--violet);"></i>Brand vs Variant vs SKU Accuracy (Top 10)
-            </div>
-            <div style="height:210px;"><canvas id="chart2"></canvas></div>
-          </div>
-        </div>
-      </div>
-
       <!-- Tab: Brand Analysis -->
-      <div id="tcontent-brand" style="display:none;">
+      <div id="tcontent-brand">
         <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-            <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy (Top 15 by Volume)
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy
+              <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(GT level — click row to drill down)</span>
+            </div>
           </div>
-          <div style="height:320px;"><canvas id="chart3"></canvas></div>
-        </div>
-        <div id="brandBreakdownCharts"></div>
-        <div class="card">
-          <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-            <i class="fas fa-tag" style="color:var(--blue);"></i>Brand Accuracy
-            <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(GT level — click row to drill down)</span>
-          </div>
+          <div id="baFilterBar" style="margin-bottom:10px;"></div>
           <div class="tbl-wrap" style="max-height:420px;">
             <table class="tbl"><thead id="baHead"></thead><tbody id="baBody"></tbody></table>
           </div>
         </div>
         <div class="card" style="margin-top:16px;">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
             <div>
               <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
                 <i class="fas fa-list-check" style="color:var(--green);"></i>Brand Demonstration Sheet
@@ -416,9 +393,11 @@
               <button class="btn btn-ghost btn-sm" onclick="exportCSV('bd')"><i class="fas fa-download"></i> Export</button>
             </div>
           </div>
+          <div id="bdFilterBar" style="margin-bottom:10px;"></div>
           <div class="tbl-wrap"><table class="tbl"><thead id="bdHead"></thead><tbody id="bdBody"></tbody></table></div>
           <div id="bdPag" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:.75rem;color:var(--muted);"></div>
         </div>
+        <div id="brandBreakdownCharts" style="margin-top:16px;"></div>
       </div>
 
       <!-- Tab: Variant Analysis -->
@@ -570,7 +549,7 @@ const APP = {
     bd: { page:1, size:25, q:'', rows:[] },
     sd: { page:1, size:25, q:'', rows:[] }
   },
-  tabs: { main: 'overview' },
+  tabs: { main: 'brand' },
   charts: { c1:null, c2:null, c3:null, c4:null, c5:null, c6:null, c7:null, c8:null },
   _sort: { brand:{col:null,dir:'desc'}, variant:{col:null,dir:'desc'}, sku:{col:null,dir:'desc'}, bd:{col:null,dir:'desc'}, sd:{col:null,dir:'desc'} },
   _sdBrands: [],
@@ -584,7 +563,10 @@ const APP = {
   _variantExpanded: new Set(),
   _pivotBrand: [],
   _pivotVariant: [],
-  _breakdownCharts: {}
+  _breakdownCharts: {},
+  _brandAccuracyFilter: 'all',
+  _brandDemoFilter: 'all',
+  _brandErrorImgExpanded: {}
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1021,7 +1003,7 @@ async function processData() {
     bd: { page:1, size:25, q:'', rows:[] },
     sd: { page:1, size:25, q:'', rows:[] }
   };
-  APP.tabs = { main: 'overview' };
+  APP.tabs = { main: 'brand' };
   APP._skuExpanded = new Set();
   APP._skuQ = '';
   APP._pivotSku = [];
@@ -1040,7 +1022,7 @@ async function processData() {
   document.getElementById('dashboard').style.display = 'flex';
 
   renderAll();
-  switchMainTab('overview');
+  switchMainTab('brand');
   saveSnapshot();
   hideOverlay();
 }
@@ -1338,7 +1320,7 @@ function renderKPIs(m) {
 // MAIN TAB SWITCHING
 // ═══════════════════════════════════════════════════════════
 
-const MAIN_TABS = ['overview','brand','variant','sku','trends'];
+const MAIN_TABS = ['brand','variant','sku','trends'];
 
 function switchMainTab(tab) {
   APP.tabs.main = tab;
@@ -1353,11 +1335,7 @@ function switchMainTab(tab) {
 
 function renderActiveTabContent(rows) {
   const tab = APP.tabs.main;
-  if (tab === 'overview') {
-    renderChart1(rows);
-    renderChart2(rows);
-  } else if (tab === 'brand') {
-    renderBrandChart(rows);
+  if (tab === 'brand') {
     renderBrandBreakdownCharts();
     renderBrandAccuracy();
     renderBrandDemo();
@@ -1413,6 +1391,36 @@ function sTh(label, table, col, cls, style) {
   var icon = active ? (s.dir === 'asc' ? '&#8593;' : '&#8595;') : '&#8597;';
   var iconColor = active ? 'var(--blue)' : '#2a3a52';
   return '<th class="' + (cls||'') + '" style="cursor:pointer;user-select:none;' + (style||'') + '" onclick="sortTable(\'' + table + '\',\'' + col.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')">' + label + ' <span style="font-size:.6rem;color:' + iconColor + ';">' + icon + '</span></th>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// BRAND ANALYSIS FILTERS
+// ═══════════════════════════════════════════════════════════
+
+function setBrandAccuracyFilter(val) {
+  APP._brandAccuracyFilter = val;
+  APP._brandExpanded = new Set();
+  APP._brandErrorImgExpanded = {};
+  renderBrandAccuracy();
+}
+
+function setBrandDemoFilter(val) {
+  APP._brandDemoFilter = val;
+  APP.pg.bd.page = 1;
+  renderBrandDemo();
+}
+
+function renderFilterToggle(containerId, currentVal, onFn, options) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var btnStyle = function(v) {
+    var active = v === currentVal;
+    return 'padding:3px 12px;border-radius:20px;border:1px solid ' + (active?'var(--blue)':'var(--border)') + ';background:' + (active?'rgba(59,130,246,.15)':'transparent') + ';color:' + (active?'var(--blue)':'var(--muted)') + ';cursor:pointer;font-size:.72rem;font-weight:' + (active?'600':'400') + ';transition:all .15s;';
+  };
+  el.innerHTML = '<div style="display:flex;align-items:center;gap:6px;">' +
+    options.map(function(opt) {
+      return '<button style="' + btnStyle(opt.val) + '" onclick="' + onFn + '(\'' + opt.val + '\')">' + opt.label + '</button>';
+    }).join('') + '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1815,8 +1823,79 @@ function buildDrillContent(errors, total, colspan) {
     '</table></div></div></td></tr>';
 }
 
+function toggleBrandErrorImg(brandName, errorBrand) {
+  var key = brandName + '||' + errorBrand;
+  if (APP._brandErrorImgExpanded[key]) delete APP._brandErrorImgExpanded[key];
+  else APP._brandErrorImgExpanded[key] = true;
+  renderBrandAccuracy();
+}
+
+function buildBrandDrillContent(brandName, errors, total, colspan) {
+  var entries = Object.entries(errors).sort(function(a,b) { return b[1].count - a[1].count; });
+
+  var tableRows = entries.map(function(entry) {
+    var errorBrand = entry[0], data = entry[1];
+    var cnt  = data.count;
+    var imgKey = brandName + '||' + errorBrand;
+    var isImgExpanded = !!APP._brandErrorImgExpanded[imgKey];
+    var safeB = brandName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var safeE = errorBrand.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    var expandIcon = '<button onclick="event.stopPropagation();toggleBrandErrorImg(\'' + safeB + '\',\'' + safeE + '\')" style="width:18px;height:18px;border-radius:3px;background:' + (isImgExpanded?'rgba(99,102,241,.2)':'rgba(100,116,139,.12)') + ';border:none;cursor:pointer;color:' + (isImgExpanded?'var(--violet)':'var(--muted)') + ';font-size:.55rem;display:inline-flex;align-items:center;justify-content:center;" title="' + (isImgExpanded?'Hide':'Show') + ' images"><i class="fas fa-images"></i></button>';
+
+    var mainErrRow = '<tr style="border-bottom:1px solid rgba(31,41,55,.3);">' +
+      '<td style="text-align:left;padding:5px 8px 5px 0;font-size:.79rem;color:var(--text);white-space:nowrap;font-weight:500;">' + expandIcon + ' ' + errorBrand + '</td>' +
+      '<td style="text-align:right;padding:5px 12px;font-size:.79rem;color:var(--red);font-weight:600;">' + cnt.toLocaleString() + '</td>' +
+      '<td style="text-align:right;padding:5px 14px;font-size:.79rem;color:var(--muted);">' + (cnt/total*100).toFixed(1) + '%</td>' +
+      '<td style="padding:5px 0 5px 4px;font-size:.72rem;color:var(--muted);">' + Object.keys(data.imgs).length.toLocaleString() + ' image' + (Object.keys(data.imgs).length !== 1 ? 's' : '') + '</td>' +
+      '</tr>';
+
+    var imgRow = '';
+    if (isImgExpanded) {
+      var allImgs = Object.values(data.imgs);
+      imgRow = '<tr><td colspan="4" style="padding:0 0 8px 24px;">' +
+        '<div style="background:rgba(99,102,241,.06);border-radius:6px;padding:10px;margin:4px 0;">' +
+        '<div style="font-size:.68rem;color:var(--muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">All affected images (' + allImgs.length + ')</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + buildImgChips(allImgs) + '</div>' +
+        '</div>' +
+        '</td></tr>';
+    }
+    return mainErrRow + imgRow;
+  }).join('');
+
+  return '<tr><td colspan="' + colspan + '" style="padding:0;">' +
+    '<div class="drill-wrap">' +
+    '<div class="drill-title"><i class="fas fa-arrow-turn-down" style="margin-right:5px;"></i>Misclassified as (brand) — ' + total + ' error' + (total>1?'s':'') + '</div>' +
+    '<div style="overflow-x:auto;">' +
+    '<table style="border-collapse:collapse;width:100%;">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:3px 8px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted Brand</th>' +
+    '<th style="text-align:right;padding:3px 12px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Count</th>' +
+    '<th style="text-align:right;padding:3px 14px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">% of Errors</th>' +
+    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Images</th>' +
+    '</tr></thead>' +
+    '<tbody>' + tableRows + '</tbody>' +
+    '</table></div></div></td></tr>';
+}
+
 function renderBrandAccuracy() {
-  const data = applySort(buildBrandAccuracy(filteredRows()), 'brand');
+  var f = APP._brandAccuracyFilter;
+  renderFilterToggle('baFilterBar', f, 'setBrandAccuracyFilter', [
+    {val:'all', label:'All'},
+    {val:'self', label:'Self (CCI)'},
+    {val:'competitor', label:'Competitor'}
+  ]);
+  var fbEl = document.getElementById('baFilterBar');
+  if (fbEl) {
+    var exportBtn = '<button class="btn btn-ghost btn-sm" onclick="exportBrandAccuracy()" style="margin-left:8px;"><i class="fas fa-download"></i> Export CSV</button>';
+    fbEl.innerHTML += exportBtn;
+  }
+
+  var allData = buildBrandAccuracy(filteredRows());
+  if (f === 'self')       allData = allData.filter(function(r) { return r.competition === 'self'; });
+  else if (f === 'competitor') allData = allData.filter(function(r) { return r.competition !== 'self'; });
+
+  const data = applySort(allData, 'brand');
   APP._pivotBrand = data;
 
   document.getElementById('baHead').innerHTML = '<tr>' +
@@ -1855,7 +1934,7 @@ function renderBrandAccuracy() {
       '<td>' + accBar(row.accuracy) + '</td>' +
       '</tr>';
 
-    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(row.errors, row.errorCount, 7) : '';
+    const drillRow = (isExpanded && hasErrors) ? buildBrandDrillContent(row.brand, row.errors, row.errorCount, 7) : '';
     return mainRow + drillRow;
   }).join('');
 }
@@ -2074,7 +2153,8 @@ function buildBrandDemoRows(rows, brands) {
       img.nonNARTD++;
     } else if (r.pred === 'Others') {
       img.others++;
-    } else if (r.gt_brand && r.gt_brand === r.pred_brand) {
+    } else if (r.pred_brand && r.gt_brand !== r.pred_brand && r.comp === 'self') {
+      // Prediction is a different CCI brand — brand-level self misclassification
       img.selfMisclass++;
     } else if (r.pred_brand && r.pred_brand in img.bc) {
       img.bc[r.pred_brand]++;
@@ -2087,9 +2167,23 @@ function buildBrandDemoRows(rows, brands) {
 }
 
 function renderBrandDemo() {
+  var bdF = APP._brandDemoFilter;
+  renderFilterToggle('bdFilterBar', bdF, 'setBrandDemoFilter', [
+    {val:'all', label:'All Images'},
+    {val:'self', label:'Has Self Misclass'},
+    {val:'competitor', label:'Has Competitor Errors'}
+  ]);
+
   const frows  = filteredRows();
   const brands = getTopCompetitorBrandsForDemo(frows, 15);
-  const allRows = buildBrandDemoRows(frows, brands);
+  var allRows = buildBrandDemoRows(frows, brands);
+
+  // Apply self/competitor filter
+  if (bdF === 'self') {
+    allRows = allRows.filter(function(r) { return r.selfMisclass > 0; });
+  } else if (bdF === 'competitor') {
+    allRows = allRows.filter(function(r) { return brands.some(function(b) { return (r.bc[b]||0) > 0; }) || r.nonNARTD > 0; });
+  }
 
   const q = APP.pg.bd.q.toLowerCase();
   const filtered = q ? allRows.filter(function(r) { return r.sid.toLowerCase().includes(q); }) : allRows;
@@ -2263,6 +2357,38 @@ function exportCSV(key) {
   const blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = Object.assign(document.createElement('a'), { href:url, download:filename });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportBrandAccuracy() {
+  var data = buildBrandAccuracy(filteredRows());
+  var f = APP._brandAccuracyFilter;
+  if (f === 'self')       data = data.filter(function(r) { return r.competition === 'self'; });
+  else if (f === 'competitor') data = data.filter(function(r) { return r.competition !== 'self'; });
+
+  var esc = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"'; };
+  var headers = ['GT Brand','Type','Total','Correct','Errors','Accuracy %','Predicted As','Error Count','% of GT Errors','Image Session IDs','Image URLs'];
+  var rows = [];
+  data.forEach(function(row) {
+    var entries = Object.entries(row.errors).sort(function(a,b) { return b[1].count - a[1].count; });
+    if (!entries.length) {
+      rows.push([row.brand, row.competition === 'self' ? 'CCI' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), '', '', '', '', '']);
+      return;
+    }
+    entries.forEach(function(e) {
+      var errBrand = e[0], errData = e[1];
+      var imgs = Object.values(errData.imgs);
+      var sids = imgs.map(function(i) { return i.sid; }).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + i.fp) : ''; }).filter(Boolean).join('; ');
+      rows.push([row.brand, row.competition === 'self' ? 'CCI' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), errBrand, errData.count, row.errorCount ? (errData.count/row.errorCount*100).toFixed(1) : '0', sids, urls]);
+    });
+  });
+
+  var csv = [headers.map(esc).join(',')].concat(rows.map(function(r) { return r.map(esc).join(','); })).join('\n');
+  var blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = Object.assign(document.createElement('a'), { href:url, download:'brand_accuracy.csv' });
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -2593,6 +2719,9 @@ function resetAll() {
   APP._pivotBrand = [];
   APP._pivotVariant = [];
   APP._sort = { brand:{col:null,dir:'desc'}, variant:{col:null,dir:'desc'}, sku:{col:null,dir:'desc'}, bd:{col:null,dir:'desc'}, sd:{col:null,dir:'desc'} };
+  APP._brandAccuracyFilter = 'all';
+  APP._brandDemoFilter = 'all';
+  APP._brandErrorImgExpanded = {};
 }
 // Set date input to today on load
 (function() {

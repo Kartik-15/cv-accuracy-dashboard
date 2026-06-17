@@ -417,12 +417,7 @@
             <table class="tbl"><thead id="vaHead"></thead><tbody id="vaBody"></tbody></table>
           </div>
         </div>
-        <div class="card" style="margin-top:16px;">
-          <div style="font-size:.82rem;font-weight:600;color:var(--section-label);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-            <i class="fas fa-box" style="color:var(--violet);"></i><span id="vaChartTitle">Attribute Accuracy (Top 15 by Volume)</span>
-          </div>
-          <div style="height:320px;"><canvas id="chart4"></canvas></div>
-        </div>
+        <div id="variantBreakdownCharts" style="margin-top:16px;"></div>
       </div>
 
       <!-- Tab: SKU Analysis -->
@@ -570,6 +565,7 @@ const APP = {
   _pivotBrand: [],
   _pivotVariant: [],
   _breakdownCharts: {},
+  _variantBreakdownCharts: {},
   _brandAccuracyFilter: 'all',
   _brandDemoFilter: 'all',
   _brandErrorImgExpanded: {},
@@ -1033,6 +1029,8 @@ async function processData() {
   APP._variantAttrKey = '';
   APP._variantGroupBy = 'brand+attr';
   APP._variantErrorImgExpanded = {};
+  Object.values(APP._variantBreakdownCharts).forEach(function(c) { if (c) c.destroy(); });
+  APP._variantBreakdownCharts = {};
 
   const skuSearchEl = document.getElementById('skuSearch');
   if (skuSearchEl) skuSearchEl.value = '';
@@ -1363,8 +1361,8 @@ function renderActiveTabContent(rows) {
     renderBrandAccuracy();
     renderBrandDemo();
   } else if (tab === 'variant') {
-    renderVariantChart(rows);
     renderVariantAccuracy();
+    renderVariantBreakdownCharts();
   } else if (tab === 'sku') {
     renderSkuAccuracy();
     renderSizeDemo();
@@ -1721,7 +1719,7 @@ function setVariantAccuracyFilter(val) {
   APP._variantExpanded = new Set();
   APP._variantErrorImgExpanded = {};
   renderVariantAccuracy();
-  renderVariantChart(filteredRows());
+  renderVariantBreakdownCharts();
 }
 
 function setVariantAttrKey(key) {
@@ -1730,7 +1728,7 @@ function setVariantAttrKey(key) {
   APP._variantErrorImgExpanded = {};
   APP._sort.variant = { col: null, dir: 'desc' };
   renderVariantAccuracy();
-  renderVariantChart(filteredRows());
+  renderVariantBreakdownCharts();
 }
 
 function setVariantGroupBy(val) {
@@ -1739,7 +1737,7 @@ function setVariantGroupBy(val) {
   APP._variantErrorImgExpanded = {};
   APP._sort.variant = { col: null, dir: 'desc' };
   renderVariantAccuracy();
-  renderVariantChart(filteredRows());
+  renderVariantBreakdownCharts();
 }
 
 function buildAttrAccuracy(rows, attrKey, groupBy) {
@@ -1880,44 +1878,48 @@ function exportVariantAccuracy() {
   URL.revokeObjectURL(url);
 }
 
-function renderVariantChart(rows) {
-  var attrKey = APP._variantAttrKey || getDefaultVariantAttrKey();
-  var groupBy = APP._variantGroupBy || 'brand+attr';
+function _attrStats(rows, attrKey, groupBy) {
+  var stats = {};
   var brandAttr = groupBy === 'brand+attr';
-  var f = APP._variantAccuracyFilter;
-  if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
-  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
-
-  const vs = {};
-  for (const r of rows) {
-    const val = attrKey && r.gt_attrs ? (r.gt_attrs[attrKey] || '') : '';
-    if (!val || _isBlankVal(val)) continue;
-    const gtBrand = r.gt_brand || '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var gtVal = r.gt_attrs ? (r.gt_attrs[attrKey] || '') : '';
+    if (!gtVal || _isBlankVal(gtVal)) continue;
+    var gtBrand = r.gt_brand || '';
     if (brandAttr && !gtBrand) continue;
-    const key = brandAttr ? (gtBrand + ' · ' + val) : val;
-    if (!vs[key]) vs[key] = { c: 0, t: 0 };
-    vs[key].t++;
-    const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
-    const predAttrVal = predEntry ? (predEntry.attrs[attrKey] || '') : '';
-    const predBrand = r.pred_brand || '';
-    const isCorrect = brandAttr ? (predBrand === gtBrand && predAttrVal === val) : (predAttrVal === val);
-    if (isCorrect) vs[key].c++;
+    var key = brandAttr ? (gtBrand + ' · ' + gtVal) : gtVal;
+    if (!stats[key]) stats[key] = { c: 0, t: 0 };
+    stats[key].t++;
+    var predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
+    var predAttrVal = predEntry ? (predEntry.attrs[attrKey] || '') : '';
+    var predBrand = r.pred_brand || '';
+    var isCorrect = brandAttr ? (predBrand === gtBrand && predAttrVal === gtVal) : (predAttrVal === gtVal);
+    if (isCorrect) stats[key].c++;
   }
-  const top15 = Object.entries(vs)
-    .sort(function(a, b) { return b[1].t - a[1].t; })
-    .slice(0, 15);
-  const labels = top15.map(function([k]) { return k; });
-  const data   = top15.map(function([, s]) { return s.t > 0 ? +(s.c / s.t * 100).toFixed(1) : 0; });
-  const counts = top15.map(function([, s]) { return s.t; });
-  const colors = data.map(function(v) { return v >= 90 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444'; });
+  return stats;
+}
 
-  var chartTitle = document.getElementById('vaChartTitle');
-  if (chartTitle) chartTitle.textContent = (attrKey || 'Attribute') + ' Accuracy (Top 15 by Volume)';
-
-  if (APP.charts.c4) { APP.charts.c4.destroy(); APP.charts.c4 = null; }
-  APP.charts.c4 = new Chart(document.getElementById('chart4'), {
+function renderVariantSubChart(canvasId, rows, fixedLabels, attrKey, groupBy) {
+  var as = _attrStats(rows, attrKey, groupBy);
+  var labels, data, counts;
+  if (fixedLabels && fixedLabels.length) {
+    labels = fixedLabels;
+    data   = labels.map(function(k) { return as[k] && as[k].t > 0 ? +(as[k].c/as[k].t*100).toFixed(1) : 0; });
+    counts = labels.map(function(k) { return as[k] ? as[k].t : 0; });
+  } else {
+    var top15 = Object.entries(as).sort(function(a,b) { return b[1].t - a[1].t; }).slice(0, 15);
+    if (!top15.length) return null;
+    labels = top15.map(function(e) { return e[0]; });
+    data   = top15.map(function(e) { return e[1].t > 0 ? +(e[1].c/e[1].t*100).toFixed(1) : 0; });
+    counts = top15.map(function(e) { return e[1].t; });
+  }
+  if (!labels.length) return null;
+  var colors = data.map(function(v) { return v >= 90 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444'; });
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return new Chart(canvas, {
     type: 'bar',
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 5 }] },
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderRadius: 4 }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: {
@@ -1925,10 +1927,101 @@ function renderVariantChart(rows) {
         tooltip: { callbacks: { label: function(c) { return ' ' + c.raw + '%  (' + counts[c.dataIndex].toLocaleString() + ' GT bboxes)'; } } }
       },
       scales: {
-        x: { min: 0, max: 100, ticks: { color: getChartDefaults().textColor, font: { size: 10 }, callback: function(v) { return v + '%'; } }, grid: { color: getChartDefaults().gridColor } },
-        y: { ticks: { color: getChartDefaults().tickColor, font: { size: 10 } }, grid: { display: false } }
+        x: { min: 0, max: 100, ticks: { color: getChartDefaults().textColor, font: { size: 9 }, callback: function(v) { return v + '%'; } }, grid: { color: getChartDefaults().gridColor } },
+        y: { ticks: { color: getChartDefaults().tickColor, font: { size: 9 } }, grid: { display: false } }
       }
     }
+  });
+}
+
+function renderVariantBreakdownCharts() {
+  Object.values(APP._variantBreakdownCharts).forEach(function(c) { if (c) c.destroy(); });
+  APP._variantBreakdownCharts = {};
+  var container = document.getElementById('variantBreakdownCharts');
+  if (!container) return;
+
+  var attrKey = APP._variantAttrKey || getDefaultVariantAttrKey();
+  var groupBy = APP._variantGroupBy || 'brand+attr';
+  var f = APP._variantAccuracyFilter;
+
+  var baseRows = APP.d.rows;
+  if (f === 'self') baseRows = baseRows.filter(function(r) { return r.gt_comp === 'self'; });
+  else if (f === 'competitor') baseRows = baseRows.filter(function(r) { return r.gt_comp !== 'self'; });
+
+  var defs = buildFilterSectionDefs();
+  var activeDefs = defs.filter(function(def) {
+    if (def.key === 'qualities') return APP.f.qualities.length > 0;
+    if (def.key.startsWith('attr:')) {
+      var attr = def.key.slice(5);
+      return APP.f.attrs[attr] && APP.f.attrs[attr].length > 0;
+    }
+    return false;
+  });
+
+  var groups = [];
+  activeDefs.forEach(function(def) {
+    var selectedVals = def.key === 'qualities'
+      ? APP.f.qualities
+      : (APP.f.attrs[def.key.slice(5)] || []);
+    var items = [];
+    selectedVals.forEach(function(val, j) {
+      var subRows;
+      if (def.key === 'qualities') {
+        subRows = baseRows.filter(function(r) { return r.quality === val; });
+      } else {
+        var attr = def.key.slice(5);
+        subRows = baseRows.filter(function(r) { return r.gt_attrs && r.gt_attrs[attr] === String(val); });
+      }
+      if (subRows && subRows.length > 0) {
+        var safeId = 'vbd_' + def.key.replace(/[^a-zA-Z0-9]/g, '_') + '_' + j;
+        items.push({ val: val, rows: subRows, id: safeId });
+      }
+    });
+    if (items.length > 0) {
+      var combined = {};
+      items.forEach(function(item) {
+        var as = _attrStats(item.rows, attrKey, groupBy);
+        Object.entries(as).forEach(function(kv) {
+          if (!combined[kv[0]]) combined[kv[0]] = 0;
+          combined[kv[0]] += kv[1].t;
+        });
+      });
+      var globalOrder = Object.entries(combined)
+        .sort(function(a, b) { return b[1] - a[1]; })
+        .slice(0, 15)
+        .map(function(e) { return e[0]; });
+      groups.push({ def: def, items: items, globalOrder: globalOrder });
+    }
+  });
+
+  if (!groups.length) { container.innerHTML = ''; return; }
+
+  var attrLabel = attrKey || 'Attribute';
+  var nCols = groups.reduce(function(mx, g) { return Math.max(mx, g.items.length); }, 1);
+  var colW = nCols === 1 ? '1fr' : 'repeat(auto-fill,minmax(360px,1fr))';
+
+  var html = groups.map(function(g) {
+    return '<div style="margin-bottom:16px;">' +
+      '<div style="font-size:.8rem;font-weight:600;color:var(--section-label);margin-bottom:10px;display:flex;align-items:center;gap:7px;">' +
+      '<i class="fas ' + g.def.icon + '" style="color:' + g.def.color + ';font-size:.72rem;"></i>' +
+      attrLabel + ' Accuracy by ' + g.def.label + '</div>' +
+      '<div style="display:grid;grid-template-columns:' + colW + ';gap:12px;">' +
+      g.items.map(function(item) {
+        var barH = Math.min(Math.max(g.globalOrder.length * 22 + 40, 140), 380);
+        return '<div class="card" style="padding:14px;">' +
+          '<div style="font-size:.74rem;font-weight:600;color:var(--muted);margin-bottom:8px;">' + item.val + '</div>' +
+          '<div style="position:relative;height:' + barH + 'px;"><canvas id="' + item.id + '"></canvas></div>' +
+          '</div>';
+      }).join('') +
+      '</div></div>';
+  }).join('');
+
+  container.innerHTML = html;
+
+  groups.forEach(function(g) {
+    g.items.forEach(function(item) {
+      APP._variantBreakdownCharts[item.id] = renderVariantSubChart(item.id, item.rows, g.globalOrder, attrKey, groupBy);
+    });
   });
 }
 
@@ -2964,6 +3057,8 @@ function resetAll() {
   if (APP.charts.c3) { APP.charts.c3.destroy(); APP.charts.c3 = null; }
   if (APP.charts.c4) { APP.charts.c4.destroy(); APP.charts.c4 = null; }
   ['c5','c6','c7','c8'].forEach(function(k) { if (APP.charts[k]) { APP.charts[k].destroy(); APP.charts[k] = null; } });
+  Object.values(APP._variantBreakdownCharts).forEach(function(c) { if (c) c.destroy(); });
+  APP._variantBreakdownCharts = {};
   APP._trendBrands = []; APP._trendVariants = []; APP._trendSkus = [];
   document.getElementById('processBtn').disabled = true;
   document.getElementById('dashboard').style.display = 'none';

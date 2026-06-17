@@ -858,9 +858,14 @@ function buildMasterdataMap(rows, cols) {
     const aname = cl(row[cols.attr_name]);
     const aval  = cl(row[cols.attr_value]);
     const comp  = cl(row[cols.competition] || '');
+    // group_name is a direct CSV column, not an attribute pair — read it from the row
+    const gname = cl(row['group_name'] || row[cols.group_name] || '');
     if (!cname) continue;
-    if (!byClass[cname]) byClass[cname] = { competition: comp };
-    else if (comp) byClass[cname].competition = comp;
+    if (!byClass[cname]) byClass[cname] = { competition: comp, _gname: gname };
+    else {
+      if (comp) byClass[cname].competition = comp;
+      if (gname && !byClass[cname]._gname) byClass[cname]._gname = gname;
+    }
     if (aname) byClass[cname][aname] = aval;
   }
 
@@ -880,7 +885,7 @@ function buildMasterdataMap(rows, cols) {
       variant:    cl(attrs['Pack type'] || attrs['Variant'] || ''),
       measure:    parseInt(cl(attrs['measure'] || '0')) || 0,
       subcat:     cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
-      group:      cl(attrs['group_name'] || attrs['Group Name'] || attrs['Group'] || ''),
+      group:      cl(attrs._gname || attrs['group_name'] || attrs['Group Name'] || attrs['Group'] || ''),
       class_name: cname,
       competition: cl(attrs.competition || ''),
       attrs: rawAttrs
@@ -1276,11 +1281,11 @@ function renderHeadlineStats(rows) {
   const skus    = unique(rows.filter(function(r) { return r.gt_class; }).map(function(r) { return r.gt.toLowerCase(); })).length;
 
   const stats = [
-    { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),     label:'Images' },
-    { icon:'fa-tag',         color:'var(--green)',  bg:'rgba(16,185,129,.12)',  num:brands.toLocaleString(),   label:'Unique Brands' },
-    { icon:'fa-layer-group', color:'var(--amber)',  bg:'rgba(245,158,11,.12)', num:groups.toLocaleString(),   label:'Unique Groups' },
-    { icon:'fa-sitemap',     color:'var(--red)',    bg:'rgba(239,68,68,.12)',   num:classes.toLocaleString(),  label:'Unique Classes' },
-    { icon:'fa-barcode',     color:'var(--violet)', bg:'rgba(139,92,246,.12)', num:skus.toLocaleString(),     label:'Unique SKUs' }
+    { icon:'fa-images',      color:'var(--blue)',   bg:'rgba(59,130,246,.12)',  num:imgs.toLocaleString(),     label:'Images',         sub:'Unique shelf images' },
+    { icon:'fa-tag',         color:'var(--green)',  bg:'rgba(16,185,129,.12)',  num:brands.toLocaleString(),   label:'Unique Brands',  sub:'GT brand names' },
+    { icon:'fa-layer-group', color:'var(--amber)',  bg:'rgba(245,158,11,.12)', num:groups.toLocaleString(),   label:'Unique Groups',  sub:'Brand groups in data' },
+    { icon:'fa-sitemap',     color:'var(--red)',    bg:'rgba(239,68,68,.12)',   num:classes.toLocaleString(),  label:'Unique Classes',  sub:'Product class types' },
+    { icon:'fa-barcode',     color:'var(--violet)', bg:'rgba(139,92,246,.12)', num:skus.toLocaleString(),     label:'Unique SKUs',    sub:'Matched GT display names' }
   ];
   document.getElementById('headlineStats').innerHTML = stats.map(function(s) {
     return '<div class="hstat">' +
@@ -1290,6 +1295,7 @@ function renderHeadlineStats(rows) {
       '<div>' +
       '<div class="hstat-num" style="color:' + s.color + ';">' + s.num + '</div>' +
       '<div class="hstat-label">' + s.label + '</div>' +
+      '<div style="font-size:.65rem;color:var(--muted);margin-top:1px;opacity:.75;">' + s.sub + '</div>' +
       '</div></div>';
   }).join('');
 }

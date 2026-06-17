@@ -224,7 +224,7 @@
       <div style="width:56px;height:56px;background:rgba(16,185,129,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
         <i class="fas fa-image" style="color:var(--green);font-size:1.4rem;"></i>
       </div>
-      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Image Quality</div>
+      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Image Quality <span style="font-size:.65rem;font-weight:500;color:var(--green);background:rgba(16,185,129,.12);padding:2px 7px;border-radius:10px;vertical-align:middle;">Optional</span></div>
       <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Maps session IDs to image quality tiers</div>
       <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-iq" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
@@ -600,7 +600,7 @@ function removeFile(key, e) {
 }
 
 function checkAllStaged() {
-  const ok = APP.files.det && APP.files.iq && APP.files.md;
+  const ok = APP.files.det && APP.files.md;
   document.getElementById('processBtn').disabled = !ok;
 }
 
@@ -776,8 +776,12 @@ async function openMappingModal() {
   showOverlay('Reading files…', 5);
   try {
     APP.raw.det = await parseFileAuto(APP.files.det);
-    showOverlay('Parsing quality file…', 40);
-    APP.raw.iq  = await parseFileAuto(APP.files.iq);
+    if (APP.files.iq) {
+      showOverlay('Parsing quality file…', 40);
+      APP.raw.iq = await parseFileAuto(APP.files.iq);
+    } else {
+      APP.raw.iq = { isXLSX: false, sheets: [], activeSheet: '_data_', data: {} };
+    }
     showOverlay('Parsing masterdata…', 70);
     APP.raw.md  = await parseFileAuto(APP.files.md);
   } catch(e) {
@@ -827,7 +831,7 @@ async function confirmProcess() {
 
   const missing = [
     ...COL_DEFS.det.filter(function(d) { return d.req && !APP.cfg.det.cols[d.key]; }).map(function(d) { return d.label; }),
-    ...COL_DEFS.iq.filter(function(d)  { return d.req && !APP.cfg.iq.cols[d.key]; }).map(function(d) { return d.label; }),
+    ...(APP.files.iq ? COL_DEFS.iq.filter(function(d) { return d.req && !APP.cfg.iq.cols[d.key]; }).map(function(d) { return d.label; }) : []),
     ...COL_DEFS.md.filter(function(d)  { return d.req && !APP.cfg.md.cols[d.key]; }).map(function(d) { return d.label; })
   ];
   if (missing.length) { alert('Required columns not mapped:\n• ' + missing.join('\n• ')); return; }
@@ -998,7 +1002,15 @@ async function processData() {
   APP.f.attrs = {};
 
   const matched = APP.d.rows.filter(function(r) { return r.quality !== 'Unknown'; }).length;
-  document.getElementById('qualWarn').style.display = (matched === 0 && APP.d.rows.length > 0) ? 'flex' : 'none';
+  var qualWarnEl = document.getElementById('qualWarn');
+  if (!APP.files.iq) {
+    qualWarnEl.style.display = 'none';
+  } else if (matched === 0 && APP.d.rows.length > 0) {
+    qualWarnEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i>Quality file: 0 sessions matched — verify session ID column mapping.';
+    qualWarnEl.style.display = 'flex';
+  } else {
+    qualWarnEl.style.display = 'none';
+  }
 
   const imgs = unique(APP.d.rows.map(function(r) { return r.sid; })).length;
   document.getElementById('topStats').innerHTML =

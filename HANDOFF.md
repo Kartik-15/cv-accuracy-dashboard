@@ -17,33 +17,35 @@ Deployment: GitHub Pages, served from `main` branch root. `.nojekyll` file preve
 
 | File | Status | Note |
 |------|--------|------|
-| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~2700+ lines) |
+| `index.html` | **ACTIVE** | Entire app — HTML + CSS + JS in one file (~3300+ lines) |
 | `.nojekyll` | **ACTIVE** | Required for GitHub Pages to serve `index.html` directly |
-| `CGC_New_15th June.csv` | **ACTIVE** | Canonical masterdata sample (CGC pivot format) |
+| `CGC_New_15th June.csv` | **ACTIVE** | Canonical masterdata sample — Coolers/Rollout project |
 | `Accuracy Sheet.xlsx` | **ACTIVE** | Sample detection data (use `Raw` sheet) |
-| `CCI_Image_Quality_Analysis - 12th June - Sheet1.csv` | **ACTIVE** | Sample image quality file |
+| `CCI_Image_Quality_Analysis - 12th June - Sheet1.csv` | **ACTIVE** | Sample image quality file (now optional) |
+| `New/CCI_Warm_Shelves_Accuracy.xlsx` | **ACTIVE** | Warm Shelves detection data (sheet: `CCI_WS_ai acc_June 15`) |
+| `New/WarmShelves_Masterdata.csv` | **ACTIVE** | Generated masterdata for Warm Shelves project (Display Name remapped to class_name) |
+| `New/fe534025-dcb1-4cec-a665-1b3200c9a9aa_groupclassinfo.csv` | **REFERENCE** | Raw groupclassinfo export — Warm Shelves classes; Display Name is in attribute_value where attribute_name='Display Name', NOT in class_name directly |
 | `CCI_Rollout_CGC_15th June.csv` | **SUPERSEDED** | Older masterdata; replaced by `CGC_New` |
 | `Final Brand and Variant.csv` | **SUPERSEDED** | Pre-flattened masterdata; app now builds this map internally |
 | `RA Accuracy.xlsx` | **UTILITY** | Earlier accuracy sheet; same schema |
 
 ### Current Objective
-Brand Analysis tab is feature-complete. Next work: apply similar Self/Competitor filters, image drill-down flow, and export to the Variant Analysis and SKU Analysis tabs.
+Multi-model trend tracking is live. Next work: polish the Trends tab (currently uses localStorage history; update it to use the new multi-model in-session data as the primary view), then apply the same filter/export/drill-down pattern to the SKU Analysis tab.
 
 ### Immediate Next Steps
-1. Variant Analysis tab: add Self/Competitor filter, export CSV with image links, same image drill-down flow as Brand.
-2. SKU Analysis tab: same treatment.
-3. Implement MSL feature: add a 4th upload zone for store-level MSL file, join on store/session ID, append MSL compliance columns to the Size Demo table.
+1. Verify multi-model upload flow end-to-end with real files (2+ models, same masterdata).
+2. SKU Analysis tab: add Self/Competitor filter, export CSV with image links, two-level image drill-down (model after Brand Analysis implementation).
+3. Implement MSL feature: add a file upload zone for store-level MSL file, join on store/session ID, append MSL compliance columns to the Size Demo table.
 4. Test with larger datasets to identify in-browser performance limits.
 
 ### Files Most Likely to Be Edited Next
 
 | Path | Why |
 |------|-----|
-| `index.html` Variant Analysis tab HTML | Add filter bar containers (`vaFilterBar`) |
-| `index.html` `renderVariantAccuracy` | Apply self/competitor filter, update drill-down |
-| `index.html` `exportVariantAccuracy` | New export function (model: `exportBrandAccuracy`) |
-| `index.html` upload screen | Add 4th zone for MSL file |
-| `index.html` `buildSizeDemoRows` / `renderSizeDemo` | Inject MSL compliance columns |
+| `index.html` `renderTrendsTab` / `renderComparisonSection` | Polish multi-model comparison chart |
+| `index.html` SKU Analysis tab | Add filter/export/drill-down matching Brand tab pattern |
+| `index.html` upload screen | Add zone for MSL file (future) |
+| `index.html` `buildSizeDemoRows` / `renderSizeDemo` | Inject MSL compliance columns (future) |
 
 ---
 
@@ -51,8 +53,8 @@ Brand Analysis tab is feature-complete. Next work: apply similar Self/Competitor
 
 ### Full Capabilities (current state)
 
-1. **Three-file upload** — Detection Data (XLSX/CSV), Image Quality (XLSX/CSV), Product Masterdata (XLSX/CSV). Drag-and-drop or click-to-browse, with staged file confirmation.
-2. **Model ID + Date inputs** — Entered before processing; stored per-run for trend tracking. Date defaults to today on page load.
+1. **Multi-model upload** — Multiple Detection Data files (one per model run), each with a user-typed model name. Image Quality (optional) and Masterdata are shared across all models. Drag-and-drop or click-to-browse. "+ Add Model" button adds slots dynamically.
+2. **Auto date extraction** — Date is auto-read from the `date` column in each detection file; no manual date entry. Model ID + Date inputs removed from upload screen.
 3. **Flexible column mapping modal** — auto-detects column names via candidate list matching; users can override via dropdown before processing. Handles XLSX sheet selection.
 4. **Quality normalization** — maps varied strings ("Good Quality", "Blurred image", "blank image") to canonical tiers: Good / Average / Poor / Blank / Blurred / Impossible / Unknown.
 5. **Masterdata pivot parsing** — converts CGC-format rows (`class_name`, `attribute_name`, `attribute_value`) into a flat `displayName → {brand, variant, measure, subcat, group, class_name, competition, attrs}` lookup map. `group_name` is read as a **direct CSV column** (not an attribute pair); `class_name` is the pivot key.
@@ -64,10 +66,10 @@ Brand Analysis tab is feature-complete. Next work: apply similar Self/Competitor
 11. **Brand Analysis tab** — layout order: (1) Brand Accuracy table, (2) Brand Demo table, (3) Breakdown charts at bottom. No top chart (c3 removed).
 12. **Brand Accuracy table** — Self/Competitor filter toggle; Export CSV button (exports all errors with image session IDs and image URLs per misclassified brand); two-level drill-down: click brand row → see error brand breakdown (counts only), click image icon on error brand → expand full image list for that brand.
 13. **Brand Demo table** — Self Misclassification = GT is 'self', pred is a *different* self brand (`r.comp === 'self' && gt_brand !== pred_brand`). Same-brand different-SKU falls to Others. Self/Competitor filter toggle. Paginated (25/page), searchable, CSV exportable.
-14. **Variant Analysis tab** — Top-15 horizontal bar chart (c4) + variant accuracy pivot with click-to-expand drill-down (inline image chips, same as before — not yet updated).
+14. **Variant Analysis tab** — Fully overhauled (session 6). Attribute selector dropdown (pick any masterdata attribute, not just variant). Granularity toggle: "Brand+Attr" (e.g. "MAAZA · PET") vs "Attr only" (e.g. "PET"). Self/Competitor filter toggle. Export CSV button. Two-level drill-down: level 1 shows which attribute values it was misclassified as; level 2 expands images. Breakdown charts at bottom (one chart per checked filter value, shared label order — mirrors Brand Analysis pattern).
 15. **SKU Analysis tab** — SKU accuracy table sorted by error count descending, with click-to-expand misclassification drill-down + Size Demo card.
 16. **Size Demo card** (inside SKU Analysis tab) — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable. All columns sortable.
-17. **Trends tab** — Historical KPI line chart (c5), Brand/Variant/SKU accuracy trend selectors + charts (c6–c8). History table with per-run delete + Clear All. Data persisted in localStorage under key `cci_accuracy_history_v1`.
+17. **Trends tab** — Two sections: (1) **Model Comparison** — live comparison chart of all models uploaded this session: X = dates (from file), Y = accuracy %, one line per model name; toggle Brand/Variant/SKU; Self/Competitor filter; comparison table (rows = models, columns = dates). (2) **History** — localStorage-persisted KPI line chart (c5) + Brand/Variant/SKU trend selectors + charts (c6–c8); history table with per-run delete + Clear All. Key: `cci_accuracy_history_v1`.
 18. **Sidebar filters** — Fully dynamic from masterdata attributes. One filter section per attribute key plus Image Quality. All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button. Empty/unknown/N/A values excluded via `_isBlankVal()`.
 19. **Configurable filter section picker** — Pill buttons at top of sidebar toggle which attribute filter sections are visible. Preference saved to localStorage (`cci_filter_sections_v2`). Default visible: Image Quality + Brand.
 20. **Sortable columns** — All tables have clickable column headers. Sort state lives in `APP._sort`.
@@ -222,7 +224,7 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 ```
 
 ### Processing Prerequisites (ordered)
-1. All three files staged + model ID entered + date selected → **Process button enabled**
+1. At least one detection file staged + masterdata staged → **Process button enabled** (IQ optional, no model ID / date required)
 2. Column mapping confirmed, all required fields mapped → **Processing starts**
 3. `buildMasterdataMap` completes → `APP.d.mMap` populated
 4. `buildQualityMap` completes → `APP.d.qMap` populated
@@ -241,9 +243,11 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 ```
 ┌──────────────────────────────────────────────────────┐
 │                   UPLOAD SCREEN                      │
-│  [Detection XLSX/CSV] [Image Quality CSV]            │
+│  Detection Files (multi-slot):                       │
+│    [File zone] [Model name input]  [+ Add Model]     │
+│    [File zone] [Model name input]  ...               │
+│  [Image Quality CSV]  ← Optional                     │
 │  [Masterdata CSV]                                    │
-│  Model ID: [text input]   Date: [date picker]        │
 │  [Process Data button]                               │
 └──────────────┬───────────────────────────────────────┘
                │ openMappingModal()
@@ -279,9 +283,9 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 │             ├─ brand:   Brand Accuracy table         │
 │             │           + Brand Demo table           │
 │             │           + breakdown charts (bottom)  │
-│             ├─ variant: c4 (top-15 bar) + pivot      │
+│             ├─ variant: attr selector + pivot + breakdown charts │
 │             ├─ sku:     SKU accuracy table + Size Demo│
-│             └─ trends:  c5–c8 + history table        │
+│             └─ trends:  comparison chart + c5–c8 + history table │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -306,7 +310,9 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
   gt_attrs:     object,   // all raw masterdata attrs for GT item (for dynamic filters)
   pred_brand:   string,   // Brand of predicted item (from masterdata)
   pred_variant: string,   // Pack type of predicted item
-  pred_measure: number    // Size in ml of predicted item
+  pred_measure: number,   // Size in ml of predicted item
+  _model:       string,   // Model name (from upload slot text input) — NEW session 6
+  _fileDate:    string,   // YYYY-MM-DD extracted from 'date' column in detection file — NEW session 6
 }
 
 // Masterdata map (APP.d.mMap)
@@ -331,40 +337,49 @@ Map<sessionId: string, quality: string>
 
 // APP state (complete)
 APP = {
-  files: { det, iq, md },             // raw File objects
-  raw:   { det, iq, md },             // parsed: { isXLSX, sheets, activeSheet, data }
-  cfg:   { det, iq, md },             // { sheet: string, cols: { key: columnName } }
+  files: { dets:[{file,modelName}], iq, md },  // dets = array, one entry per model slot
+  raw:   { dets:[], iq, md },                  // parsed: { isXLSX, sheets, activeSheet, data }
+  cfg:   { det, iq, md },                      // { sheet: string, cols: { key: columnName } }
   d: {
     rows, qMap, mMap,
     brands, qualities, variants, measures, subcats,
     attrKeys: string[],               // sorted list of all masterdata attribute keys
     attrValues: { [key]: string[] },  // unique non-blank values per attribute
-    modelId: string,
-    date: string
+    modelNames: string[],             // unique model names in insertion order
+    dateRange: string,                // summary string e.g. "3 dates"
+    modelId: string,                  // legacy — empty string
+    date: string                      // legacy — empty string
   },
   f:     { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
-  // attrs: { [attrKey]: string[] } — active attr filter selections
   pg:    { bd: {page,size,q,rows}, sd: {page,size,q,rows} },
-  tabs:  { main: 'brand' },           // 'brand' is now default (no overview)
+  tabs:  { main: 'brand' },
   charts: { c1:null, c2:null, c3:null, c4:null, c5:null, c6:null, c7:null, c8:null },
-  // c1,c2,c3 are dead (overview/brand chart removed) but kept for resetAll safety
   _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
-  _visibleFilterSections: Set,  // loaded from localStorage 'cci_filter_sections_v2'
-  _breakdownCharts: {},         // Chart.js instances for brand breakdown charts; keyed by canvas id
-  _brandAccuracyFilter: 'all',  // 'all'|'self'|'competitor' — filter for Brand Accuracy table
-  _brandDemoFilter: 'all',      // 'all'|'self'|'competitor' — filter for Brand Demo table
-  _brandErrorImgExpanded: {},   // { "brandName||errorBrand": true } — expanded image lists
-  _sdBrands: [],           // brands with size errors (side-effect of buildSizeDemoRows)
-  _skuExpanded: Set,       // expanded SKU drill-down rows
-  _skuQ: string,           // SKU search query
-  _pivotSku: [],           // current SKU pivot data
-  _trendBrands: [],        // selected brand items for trend chart
-  _trendVariants: [],      // selected variant items for trend chart
-  _trendSkus: [],          // selected SKU items for trend chart
-  _brandExpanded: Set,     // expanded brand drill-down rows (level 1)
-  _variantExpanded: Set,   // expanded variant drill-down rows
-  _pivotBrand: [],         // current brand pivot data
-  _pivotVariant: []        // current variant pivot data
+  _visibleFilterSections: Set,
+  _breakdownCharts: {},         // brand breakdown chart instances
+  _variantBreakdownCharts: {},  // variant breakdown chart instances
+  _brandAccuracyFilter: 'all',
+  _brandDemoFilter: 'all',
+  _brandErrorImgExpanded: {},   // { "brandName||errorBrand": true }
+  _variantAccuracyFilter: 'all',
+  _variantAttrKey: string,      // currently selected attribute for Variant tab
+  _variantGroupBy: 'brand+attr',// 'brand+attr' | 'attr'
+  _variantErrorImgExpanded: {}, // { "rowLabel||errorVariant": true }
+  _activeModel: 'all',          // model filter for Brand/Variant/SKU tabs
+  _trendsAccLevel: 'brand',     // 'brand'|'variant'|'sku' — Trends tab accuracy level
+  _trendsFilter: 'all',         // 'all'|'self'|'competitor'
+  _trendsCompChart: null,       // Chart.js instance for model comparison chart
+  _sdBrands: [],
+  _skuExpanded: Set,
+  _skuQ: string,
+  _pivotSku: [],
+  _trendBrands: [],
+  _trendVariants: [],
+  _trendSkus: [],
+  _brandExpanded: Set,
+  _variantExpanded: Set,
+  _pivotBrand: [],
+  _pivotVariant: []
 }
 ```
 
@@ -376,7 +391,7 @@ Accuracy Dashboard/
 │   ├── CSS (.main-tab, .main-tab.active, .drill-wrap, .img-chip, .hstat* classes;
 │   │        CSS vars: --section-label, --code-bg, --code-text)
 │   ├── Upload Screen (#uploadScreen)
-│   │   └── Model ID input + Date picker (before Process button)
+│   │   └── Multi-slot detection zone (#detSlotsContainer) + addModelSlot/removeModelSlot
 │   ├── Column Mapping Modal (#mappingModal)
 │   ├── Processing Overlay (#procOverlay)
 │   ├── Dashboard (#dashboard)
@@ -417,7 +432,14 @@ Accuracy Dashboard/
 │       ├── buildBrandDrillContent (brandName, errors, total, colspan)  ← NEW — Brand tab only
 │       ├── buildImgChips / renderBrandSubChart(canvasId, rows, fixedLabels)
 │       ├── renderBrandBreakdownCharts()
-│       ├── buildVariantAccuracy / renderVariantAccuracy / renderVariantChart (c4)
+│       ├── buildAttrAccuracy(rows, attrKey, groupBy)  ← NEW — core Variant tab metric builder
+│       ├── _attrStats(rows, attrKey, groupBy)         ← NEW — mirrors _brandStats for variant charts
+│       ├── renderVariantAccuracy / renderVariantBreakdownCharts  ← overhauled session 6
+│       ├── _modelFilteredRows()                       ← NEW — filters rows by APP._activeModel
+│       ├── setActiveModel(name)                       ← NEW — sets model filter + re-renders
+│       ├── renderModelPillBar(containerId)            ← NEW — renders model selector pills
+│       ├── renderTrendsTab / renderComparisonSection  ← overhauled session 6
+│       ├── renderKpiTrendChart (c5) / renderHistoryTable
 │       ├── buildSkuAccuracy / renderSkuAccuracy / toggleSkuDrillIdx
 │       ├── getTopCompetitorBrandsForDemo / buildBrandDemoRows / renderBrandDemo
 │       ├── buildSizeDemoRows / renderSizeDemo
@@ -623,6 +645,35 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 **23. All "Self" brand labels shown as "Self" not "CCI"**
 - Dashboard is brand-agnostic. Type column, filter toggles, and export CSV all use "Self" / "Competitor".
 
+**24. Image Quality file made optional**
+- IQ file removed from `checkAllStaged` gate — only detection + masterdata required.
+- `openMappingModal` skips parsing IQ if not staged; `confirmProcess` skips IQ column validation.
+- Quality fallback chain unchanged: `qMap.get(sid) → embedded quality col → 'Unknown'`.
+- `qualWarn` banner only shows when IQ was uploaded but matched 0 rows. Silent when not uploaded.
+
+**25. Variant Analysis tab uses attribute selector, not fixed "variant"**
+- `buildAttrAccuracy(rows, attrKey, groupBy)` is the generic metric builder — `attrKey` is any masterdata attribute.
+- `groupBy = 'brand+attr'` gives "MAAZA · PET" rows; `groupBy = 'attr'` gives "PET" rows.
+- Default is `brand+attr` to show SKU-level breakdown. User can toggle.
+- Drill-down level 1 shows which attribute values it was misclassified as; level 2 expands images.
+
+**26. Multi-model upload: one file per model, date auto-read from file**
+- `APP.files.dets` is an array of `{file, modelName}` objects. All share one masterdata + one optional IQ.
+- Date extracted from `date` column in each detection file (most common value → YYYY-MM-DD).
+- Every enriched row tagged with `_model` (model name) and `_fileDate` (YYYY-MM-DD).
+- Model ID + Date manual inputs removed from upload screen.
+
+**27. Model filter added to Brand/Variant/SKU tabs**
+- `_modelFilteredRows()` wraps `APP.d.rows` with an `_activeModel` filter.
+- When only 1 model is loaded, the pill bar is hidden — zero UX overhead for single-model use.
+- `setActiveModel(name)` resets pagination + expanded state before re-rendering.
+
+**28. Warm Shelves masterdata compatibility**
+- `CGC_New_15th June.csv` and the `fe534025...groupclassinfo.csv` cover the Coolers project. Their `class_name` values do NOT match Warm Shelves detection GT display names.
+- For Warm Shelves: the display names live in `attribute_value` where `attribute_name = 'Display Name'` in the groupclassinfo CSV. These must be promoted to `class_name` to work with the dashboard.
+- `New/WarmShelves_Masterdata.csv` is the pre-generated correct masterdata for Warm Shelves (252/256 GT match, 98.4%).
+- Rule: always verify `class_name` values match GT display names before loading. Use the compatibility check script if unsure.
+
 ---
 
 ## Section 7: Bugs & Corrections
@@ -645,9 +696,9 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 - None blocking current use.
 
 ### Important
-- **Variant Analysis tab**: add Self/Competitor filter, export CSV with image links, two-level image drill-down (model after Brand Analysis implementation).
-- **SKU Analysis tab**: same treatment as Variant.
-- **MSL feature:** Add 4th upload zone + MSL file parsing + join on store/session + MSL compliance columns in Size Demo table.
+- **Verify multi-model upload end-to-end** with 2+ real files — confirm model filter pills, Trends comparison chart, and row tagging all work correctly.
+- **SKU Analysis tab**: add Self/Competitor filter, export CSV with image links, two-level image drill-down (model after Brand Analysis).
+- **MSL feature:** Add file upload zone + MSL file parsing + join on store/session + MSL compliance columns in Size Demo table.
 
 ### Nice-to-Have
 - Performance testing with large datasets (10k+ bounding boxes).
@@ -746,6 +797,15 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2026 | Added descriptive subtitles to all 5 headline stat cards |
 | June 2026 | All "CCI" labels replaced with "Self" throughout the UI for brand-agnostic dashboard |
 | June 2026 | HANDOFF.md updated for session 5 |
+| June 2026 | **Session 6:** Image Quality file made optional — removed from `checkAllStaged` gate; parsing skipped when absent; `qualWarn` banner only shows on IQ upload failure, not when skipped |
+| June 2026 | Variant Analysis tab overhauled: attribute selector dropdown (any masterdata attr); granularity toggle (Brand+Attr / Attr only); Self/Competitor filter; Export CSV; two-level drill-down (misclassified attr values → image expand); breakdown charts at bottom (one per checked filter value, shared label order) |
+| June 2026 | Multi-model upload: replaced single detection slot with dynamic multi-slot container (`detSlotsContainer`); each slot has file zone + model name text input; `addModelSlot` / `removeModelSlot`; `APP.files.dets` array; Model ID + Date inputs removed |
+| June 2026 | Row tagging: every enriched row gets `_model` (typed name) and `_fileDate` (YYYY-MM-DD from date column) |
+| June 2026 | Model filter pill bar on Brand/Variant/SKU tabs: `_modelFilteredRows()` + `setActiveModel()`; hidden when only 1 model loaded |
+| June 2026 | Trends tab: new Model Comparison section with live comparison chart (one line per model, X=dates, Y=accuracy); toggle Brand/Variant/SKU; comparison table; localStorage history section retained |
+| June 2026 | topStats bar updated: shows model count + date range instead of model ID + single date |
+| June 2026 | Warm Shelves compatibility investigation: `CGC_New_15th June.csv` covers Coolers only (59/256 GT match for Warm Shelves); generated `New/WarmShelves_Masterdata.csv` by promoting Display Name attribute_value to class_name (252/256 match) |
+| June 2026 | HANDOFF.md updated for session 6 |
 
 ---
 
@@ -764,14 +824,17 @@ shelf bounding-box predictions. 100% client-side, no server. Brand-agnostic (lab
 
 STACK: Vanilla JS + Tailwind CDN + Chart.js + PapaParse + SheetJS. No build tools.
 
-INPUTS (3 file upload slots + model ID + date):
-  1. Detection Data (XLSX "Raw" sheet or CSV):
+INPUTS (multi-model detection + shared masterdata + optional IQ):
+  1. Detection Data — one or more files (XLSX/CSV), one per model version:
      Required cols: session_id, QC_Display Name (GT), Display Name (Pred), competition
-     Optional: file_path (GCS URL for image chips), quality (embedded fallback)
-  2. Image Quality (CSV): cooler_session_id → image_quality
+     Optional: file_path (GCS URL for image chips), quality (embedded fallback), date (for trend tracking)
+     Each slot has a model name text input (user-typed). Date auto-read from 'date' column.
+  2. Image Quality (CSV) — OPTIONAL: cooler_session_id → image_quality
   3. Masterdata (CSV, CGC pivot format): class_name, attribute_name, attribute_value,
      group_name (DIRECT COLUMN — not an attribute pair), competition
-  4. Model ID (text input) + Date (date picker) — stored per run for trend tracking
+     IMPORTANT: class_name must match GT/pred display names exactly (case-insensitive).
+     For Warm Shelves project, use New/WarmShelves_Masterdata.csv — the standard
+     groupclassinfo CSV has wrong class_names for that project.
 
 KEY RULES:
   - is_correct = (QC_Display Name === Display Name) — always recomputed, never from file
@@ -799,37 +862,36 @@ KEY RULES:
   - Breakdown charts: at BOTTOM of Brand Analysis tab; only when filter checkboxes checked;
     shared globalOrder (top-15 by combined volume) for all charts in a group
 
-APP STATE:
+APP STATE (key additions since session 6):
 APP = {
-  files, raw, cfg,
-  d: { rows, qMap, mMap, brands, qualities, variants, measures, subcats,
-       attrKeys:[], attrValues:{}, modelId, date },
-  f: { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
-  pg: { bd:{page,size,q,rows}, sd:{page,size,q,rows} },
-  tabs: { main: 'brand' },   // ← 'brand' is default (no overview tab)
-  charts: { c1, c2, c3, c4, c5, c6, c7, c8 },
-  _sort: { brand:{col,dir}, variant:{col,dir}, sku:{col,dir}, bd:{col,dir}, sd:{col,dir} },
-  _visibleFilterSections: Set,
-  _breakdownCharts: {},
-  _brandAccuracyFilter: 'all',     // 'all'|'self'|'competitor'
-  _brandDemoFilter: 'all',         // 'all'|'self'|'competitor'
-  _brandErrorImgExpanded: {},      // { "gtBrand||errorBrand": true }
-  _sdBrands, _skuExpanded, _skuQ, _pivotSku,
-  _trendBrands, _trendVariants, _trendSkus,
-  _brandExpanded, _variantExpanded, _pivotBrand, _pivotVariant
+  files: { dets:[{file,modelName}], iq, md },  // ← dets is now an array
+  d: { rows, qMap, mMap, ..., modelNames:[], dateRange:'' },
+  _activeModel: 'all',          // model filter pill selection
+  _trendsAccLevel: 'brand',     // 'brand'|'variant'|'sku'
+  _trendsFilter: 'all',
+  _trendsCompChart: null,       // comparison chart instance
+  _variantAccuracyFilter: 'all',
+  _variantAttrKey: '',          // selected attribute for Variant tab
+  _variantGroupBy: 'brand+attr',
+  _variantErrorImgExpanded: {},
+  _variantBreakdownCharts: {},
+  // ... rest unchanged from session 5
 }
 
-MAIN_TABS = ['brand','variant','sku','trends']  // 4 tabs — no overview
+ENRICHED ROW NEW FIELDS (session 6):
+  _model:    string  // model name from upload slot
+  _fileDate: string  // YYYY-MM-DD from date column
+
+MAIN_TABS = ['brand','variant','sku','trends']
 FILTER_SECTIONS_KEY = 'cci_filter_sections_v2'
 THEME_KEY = 'cci_theme'
 HISTORY_KEY = 'cci_accuracy_history_v1'
 
-HEADLINE STATS (5 cards): Images | Unique Brands | Unique Groups (group_name direct col) |
-  Unique Classes (class_name pivot) | Unique SKUs (masterdata-matched GT display names)
-  Each card has a subtitle line (e.g. "Brand groups in data", "Matched GT display names")
+HEADLINE STATS (5 cards): Images | Unique Brands | Unique Groups | Unique Classes | Unique SKUs
+topStats bar now shows: N models · M dates · image count (no model ID / date fields)
 
-CURRENT STATUS: Brand Analysis tab fully overhauled. Next: apply same filter/export/drill-down
-pattern to Variant and SKU tabs. Then MSL feature.
+CURRENT STATUS: Multi-model upload + Variant Analysis overhaul + IQ optional all live.
+Next: SKU tab drill-down, verify multi-model flow end-to-end, MSL feature.
 
 SAMPLE DATA FILES in same folder:
   - Accuracy Sheet.xlsx (detection data — use "Raw" sheet)

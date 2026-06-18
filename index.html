@@ -198,25 +198,21 @@
     <p style="color:var(--muted);max-width:480px;line-height:1.6;font-size:.9rem;">Upload your detection data, image quality mapping, and product masterdata to analyze computer vision model accuracy — all processing happens locally in your browser.</p>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;width:100%;max-width:900px;margin-bottom:32px;">
-
-    <!-- Detection -->
-    <div id="zone-det" class="zone" onclick="document.getElementById('inp-det').click()">
-      <input type="file" id="inp-det" accept=".xlsx,.xls,.csv" style="display:none" onchange="stageFile('det',this.files[0])">
-      <div style="width:56px;height:56px;background:rgba(59,130,246,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
-        <i class="fas fa-table" style="color:var(--blue);font-size:1.4rem;"></i>
+  <!-- Detection Files (multi-model) -->
+  <div style="width:100%;max-width:900px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-table" style="color:var(--blue);"></i>Detection Files
       </div>
-      <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Detection Data</div>
-      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Bounding box level AI predictions vs Ground Truth</div>
-      <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
-      <div id="staged-det" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
-        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
-          <i class="fas fa-check-circle"></i>
-          <span id="fname-det" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-        </span>
-        <button onclick="removeFile('det',event)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:2px 4px;">✕</button>
-      </div>
+      <button onclick="addModelSlot()" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--blue);font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+        <i class="fas fa-plus" style="font-size:.7rem;"></i> Add Model
+      </button>
     </div>
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:12px;">Upload one file per model. Date is auto-read from the file.</div>
+    <div id="detSlotsContainer"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;width:100%;max-width:900px;margin-bottom:32px;">
 
     <!-- Image Quality -->
     <div id="zone-iq" class="zone" onclick="document.getElementById('inp-iq').click()">
@@ -252,20 +248,6 @@
         </span>
         <button onclick="removeFile('md',event)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:2px 4px;">✕</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Model ID + Date inputs -->
-  <div style="display:flex;gap:16px;width:100%;max-width:900px;margin-bottom:20px;align-items:flex-start;">
-    <div style="flex:1;">
-      <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Model ID / Version</label>
-      <input type="text" id="inp-modelId" placeholder="e.g. v1.2, YOLOv8-epoch-50, Model-3…" style="width:100%;">
-      <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Tag this run to track accuracy trends over time</div>
-    </div>
-    <div style="flex:0 0 auto;">
-      <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Run Date</label>
-      <input type="date" id="inp-runDate" style="width:190px;">
-      <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">Defaults to today</div>
     </div>
   </div>
 
@@ -355,6 +337,9 @@
 
       <!-- KPI cards (4, always visible) -->
       <div id="kpiRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;"></div>
+
+      <!-- Model selector (shown when 2+ models loaded) -->
+      <div id="modelSelectorBar" style="display:none;margin-bottom:12px;"></div>
 
       <!-- Main tab bar -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto;">
@@ -459,6 +444,9 @@
       <!-- Tab: Trends -->
       <div id="tcontent-trends" style="display:none;">
 
+        <!-- Live model comparison (populated when 2+ models uploaded) -->
+        <div id="trendsComparisonSection"></div>
+
         <!-- Run history table -->
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -526,8 +514,8 @@
 // APP STATE
 // ═══════════════════════════════════════════════════════════
 const APP = {
-  files: { det: null, iq: null, md: null },
-  raw:   { det: null, iq: null, md: null },
+  files: { dets: [{file: null, modelName: ''}], iq: null, md: null },
+  raw:   { det: null, dets: [], iq: null, md: null },
   cfg: {
     det: { sheet: 'Raw',    cols: {} },
     iq:  { sheet: '_data_', cols: {} },
@@ -543,7 +531,10 @@ const APP = {
     measures: [],
     subcats: [],
     attrKeys: [],
-    attrValues: {}
+    attrValues: {},
+    modelNames: [],
+    modelId: '',
+    date: ''
   },
   f: { qualities:[], brands:[], variants:[], measures:[], attrs:{} },
   pg: {
@@ -572,12 +563,87 @@ const APP = {
   _variantAccuracyFilter: 'all',
   _variantAttrKey: '',
   _variantGroupBy: 'brand+attr',
-  _variantErrorImgExpanded: {}
+  _variantErrorImgExpanded: {},
+  _activeModel: 'all',
+  _trendsAccLevel: 'brand',
+  _trendsFilter: 'all',
+  _trendsCompChart: null
 };
 
 // ═══════════════════════════════════════════════════════════
 // UPLOAD SCREEN
 // ═══════════════════════════════════════════════════════════
+
+// ── Detection multi-slot functions ──────────────────────────
+
+function buildSlotHTML(i, det) {
+  var staged = det && det.file;
+  var fname = staged ? det.file.name : '';
+  var modelVal = (det && det.modelName) ? det.modelName.replace(/"/g,'&quot;') : '';
+  var showRemove = APP.files.dets.length > 1;
+  return '<div id="det-slot-'+i+'" style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">' +
+    '<div id="zone-det-'+i+'" class="zone' + (staged?' staged':'') + '" onclick="document.getElementById(\'inp-det-'+i+'\').click()" ' +
+    'style="flex:1;padding:10px 14px;min-height:auto;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;">' +
+    '<input type="file" id="inp-det-'+i+'" accept=".xlsx,.xls,.csv" style="display:none" onchange="stageDetFile('+i+',this.files[0])">' +
+    '<i class="fas fa-table" style="color:var(--blue);font-size:1rem;flex-shrink:0;"></i>' +
+    (staged ?
+      '<span style="display:flex;align-items:center;gap:6px;flex:1;overflow:hidden;">' +
+      '<i class="fas fa-check-circle" style="color:var(--green);font-size:.85rem;"></i>' +
+      '<span style="font-size:.8rem;color:#10b981;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + fname + '</span>' +
+      '</span>' :
+      '<span style="font-size:.8rem;color:var(--muted);">Drop detection file or click to select</span>'
+    ) +
+    '</div>' +
+    '<input type="text" id="modelname-'+i+'" value="' + modelVal + '" placeholder="Model name (e.g. v2.1)" ' +
+    'style="width:175px;flex-shrink:0;" oninput="APP.files.dets['+i+'].modelName=this.value">' +
+    (showRemove ?
+      '<button onclick="removeModelSlot('+i+')" title="Remove" ' +
+      'style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:2px 5px;flex-shrink:0;transition:color .15s;" ' +
+      'onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--muted)\'">&#x2715;</button>' :
+      '<div style="width:24px;flex-shrink:0;"></div>'
+    ) +
+    '</div>';
+}
+
+function renderDetSlots() {
+  var container = document.getElementById('detSlotsContainer');
+  if (!container) return;
+  container.innerHTML = APP.files.dets.map(function(det, i) { return buildSlotHTML(i, det); }).join('');
+  APP.files.dets.forEach(function(_, i) { setupSlotDragDrop(i); });
+}
+
+function setupSlotDragDrop(i) {
+  var z = document.getElementById('zone-det-'+i);
+  if (!z) return;
+  z.addEventListener('dragover', function(e) { e.preventDefault(); z.classList.add('over'); });
+  z.addEventListener('dragleave', function() { z.classList.remove('over'); });
+  z.addEventListener('drop', function(e) {
+    e.preventDefault(); z.classList.remove('over');
+    var f = e.dataTransfer.files[0];
+    if (f) stageDetFile(i, f);
+  });
+}
+
+function stageDetFile(i, file) {
+  if (!file) return;
+  APP.files.dets[i].file = file;
+  renderDetSlots();
+  checkAllStaged();
+}
+
+function addModelSlot() {
+  APP.files.dets.push({file: null, modelName: ''});
+  renderDetSlots();
+}
+
+function removeModelSlot(i) {
+  APP.files.dets.splice(i, 1);
+  if (!APP.files.dets.length) APP.files.dets.push({file: null, modelName: ''});
+  renderDetSlots();
+  checkAllStaged();
+}
+
+// ── Shared file functions (IQ, Masterdata) ───────────────────
 
 function stageFile(key, file) {
   if (!file) return;
@@ -600,11 +666,11 @@ function removeFile(key, e) {
 }
 
 function checkAllStaged() {
-  const ok = APP.files.det && APP.files.md;
+  const ok = APP.files.dets.some(function(d) { return d.file; }) && APP.files.md;
   document.getElementById('processBtn').disabled = !ok;
 }
 
-['det','iq','md'].forEach(function(k) {
+['iq','md'].forEach(function(k) {
   const z = document.getElementById('zone-' + k);
   z.addEventListener('dragover', function(e) { e.preventDefault(); z.classList.add('over'); });
   z.addEventListener('dragleave', function() { z.classList.remove('over'); });
@@ -615,6 +681,9 @@ function checkAllStaged() {
     if (f) stageFile(k, f);
   });
 });
+
+// Initialise slots on page load
+(function() { renderDetSlots(); })();
 
 // ═══════════════════════════════════════════════════════════
 // FILE PARSING
@@ -775,14 +844,29 @@ function switchTab(key) {
 async function openMappingModal() {
   showOverlay('Reading files…', 5);
   try {
-    APP.raw.det = await parseFileAuto(APP.files.det);
+    // Parse all staged detection files
+    APP.raw.dets = [];
+    var stagedCount = APP.files.dets.filter(function(d) { return d.file; }).length;
+    var parsed = 0;
+    for (var di = 0; di < APP.files.dets.length; di++) {
+      if (APP.files.dets[di].file) {
+        showOverlay('Parsing detection file ' + (++parsed) + ' of ' + stagedCount + '…', 5 + parsed * Math.floor(30 / stagedCount));
+        APP.raw.dets.push(await parseFileAuto(APP.files.dets[di].file));
+      } else {
+        APP.raw.dets.push(null);
+      }
+    }
+    // Use first staged file for column mapping UI
+    var firstRaw = APP.raw.dets.find(function(d) { return d !== null; }) || { isXLSX: false, sheets: ['_data_'], activeSheet: '_data_', data: {'_data_': []} };
+    APP.raw.det = firstRaw;
+
     if (APP.files.iq) {
-      showOverlay('Parsing quality file…', 40);
+      showOverlay('Parsing quality file…', 50);
       APP.raw.iq = await parseFileAuto(APP.files.iq);
     } else {
       APP.raw.iq = { isXLSX: false, sheets: [], activeSheet: '_data_', data: {} };
     }
-    showOverlay('Parsing masterdata…', 70);
+    showOverlay('Parsing masterdata…', 75);
     APP.raw.md  = await parseFileAuto(APP.files.md);
   } catch(e) {
     hideOverlay();
@@ -791,7 +875,7 @@ async function openMappingModal() {
   }
   hideOverlay();
 
-  APP.cfg.det.sheet = APP.raw.det.sheets.includes('Raw') ? 'Raw' : APP.raw.det.activeSheet;
+  APP.cfg.det.sheet = APP.raw.det.sheets && APP.raw.det.sheets.includes('Raw') ? 'Raw' : APP.raw.det.activeSheet;
   APP.cfg.iq.sheet  = APP.raw.iq.activeSheet;
   APP.cfg.md.sheet  = APP.raw.md.activeSheet;
 
@@ -950,9 +1034,6 @@ function enrichRows(detRows, qMap, mMap, cols) {
 }
 
 async function processData() {
-  APP.d.modelId = (document.getElementById('inp-modelId').value || '').trim() || ('Run-' + (getHistory().length + 1));
-  APP.d.date    = document.getElementById('inp-runDate').value || new Date().toISOString().split('T')[0];
-
   showOverlay('Building masterdata map…', 10);
   await tick();
 
@@ -962,10 +1043,55 @@ async function processData() {
   APP.d.qMap = buildQualityMap(getActiveRows('iq'), APP.cfg.iq.cols);
   showOverlay('Enriching detection rows…', 40); await tick();
 
-  APP.d.rows = enrichRows(
-    getActiveRows('det'),
-    APP.d.qMap, APP.d.mMap, APP.cfg.det.cols
-  );
+  // Process each staged detection file
+  var allRows = [];
+  var modelNames = [];
+  var dateSet = new Set();
+
+  for (var di = 0; di < APP.files.dets.length; di++) {
+    if (!APP.files.dets[di].file || !APP.raw.dets[di]) continue;
+
+    var modelName = (APP.files.dets[di].modelName || '').trim() || ('Model ' + (di + 1));
+    var rawDet = APP.raw.dets[di];
+
+    // Use configured sheet, fall back to file's active sheet
+    var sheet = APP.cfg.det.sheet;
+    var rawRows = (rawDet.data && rawDet.data[sheet]) ? rawDet.data[sheet] :
+                  (rawDet.data && rawDet.data[rawDet.activeSheet]) ? rawDet.data[rawDet.activeSheet] : [];
+
+    // Auto-detect date column from the file
+    var fileDate = '';
+    if (rawRows.length) {
+      var firstRowKeys = Object.keys(rawRows[0]);
+      var dateCol = firstRowKeys.find(function(k) { return /^date$/i.test(k.trim()); }) ||
+                    firstRowKeys.find(function(k) { return k.toLowerCase().includes('date'); }) || null;
+      if (dateCol) {
+        var dateCounts = {};
+        rawRows.forEach(function(r) {
+          var v = cl(r[dateCol] || '');
+          var d = v.split(' ')[0].split('T')[0];
+          if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) dateCounts[d] = (dateCounts[d] || 0) + 1;
+        });
+        var sortedDates = Object.entries(dateCounts).sort(function(a, b) { return b[1] - a[1]; });
+        fileDate = sortedDates.length ? sortedDates[0][0] : '';
+      }
+    }
+
+    var enriched = enrichRows(rawRows, APP.d.qMap, APP.d.mMap, APP.cfg.det.cols);
+    enriched.forEach(function(r) {
+      r._model = modelName;
+      r._fileDate = fileDate;
+    });
+
+    allRows = allRows.concat(enriched);
+    if (modelNames.indexOf(modelName) < 0) modelNames.push(modelName);
+    if (fileDate) dateSet.add(fileDate);
+  }
+
+  APP.d.rows = allRows;
+  APP.d.modelNames = modelNames;
+  APP.d.modelId = modelNames.length === 1 ? modelNames[0] : (modelNames.length + ' models');
+  APP.d.date = Array.from(dateSet).sort().join(' – ');
   showOverlay('Computing unique filter values…', 65); await tick();
 
   APP.d.qualities = unique(APP.d.rows.map(function(r) { return r.quality; }))
@@ -1013,9 +1139,12 @@ async function processData() {
   }
 
   const imgs = unique(APP.d.rows.map(function(r) { return r.sid; })).length;
+  var uniqueDates = Array.from(dateSet).sort();
+  var modelCountLabel = modelNames.length + ' model' + (modelNames.length !== 1 ? 's' : '');
+  var dateCountLabel  = uniqueDates.length + ' date' + (uniqueDates.length !== 1 ? 's' : '');
   document.getElementById('topStats').innerHTML =
-    '<span><i class="fas fa-code-branch" style="color:var(--amber);margin-right:4px;"></i>' + APP.d.modelId + '</span>' +
-    '<span><i class="fas fa-calendar" style="color:var(--blue);margin-right:4px;"></i>' + APP.d.date + '</span>' +
+    '<span><i class="fas fa-code-branch" style="color:var(--amber);margin-right:4px;"></i>' + modelCountLabel + '</span>' +
+    '<span><i class="fas fa-calendar" style="color:var(--blue);margin-right:4px;"></i>' + dateCountLabel + '</span>' +
     '<span><i class="fas fa-images" style="color:var(--green);margin-right:4px;"></i>' + imgs.toLocaleString() + ' images</span>' +
     '<span><i class="fas fa-check-circle" style="color:var(--violet);margin-right:4px;"></i>' + matched.toLocaleString() + ' quality-matched</span>';
 
@@ -1043,6 +1172,8 @@ async function processData() {
   APP._variantErrorImgExpanded = {};
   Object.values(APP._variantBreakdownCharts).forEach(function(c) { if (c) c.destroy(); });
   APP._variantBreakdownCharts = {};
+  APP._activeModel = 'all';
+  if (APP._trendsCompChart) { APP._trendsCompChart.destroy(); APP._trendsCompChart = null; }
 
   const skuSearchEl = document.getElementById('skuSearch');
   if (skuSearchEl) skuSearchEl.value = '';
@@ -1126,10 +1257,17 @@ function toggleFilterSection(key) {
   renderAll();
 }
 
+function _modelFilteredRows() {
+  if (APP._activeModel && APP._activeModel !== 'all') {
+    return APP.d.rows.filter(function(r) { return r._model === APP._activeModel; });
+  }
+  return APP.d.rows;
+}
+
 function filteredRows() {
   var f = APP.f;
   var attrEntries = Object.entries(f.attrs);
-  return APP.d.rows.filter(function(r) {
+  return _modelFilteredRows().filter(function(r) {
     if (f.qualities.length && !f.qualities.includes(r.quality)) return false;
     for (var i = 0; i < attrEntries.length; i++) {
       var attrName = attrEntries[i][0], vals = attrEntries[i][1];
@@ -1144,7 +1282,7 @@ function filteredRows() {
 function filteredRowsExcept(excludeKey) {
   var f = APP.f;
   var attrEntries = Object.entries(f.attrs);
-  return APP.d.rows.filter(function(r) {
+  return _modelFilteredRows().filter(function(r) {
     if (excludeKey !== 'qualities' && f.qualities.length && !f.qualities.includes(r.quality)) return false;
     for (var i = 0; i < attrEntries.length; i++) {
       var attrName = attrEntries[i][0], vals = attrEntries[i][1];
@@ -2770,11 +2908,45 @@ function qColor(q) {
 // MAIN RENDER ORCHESTRATOR
 // ═══════════════════════════════════════════════════════════
 
+function renderModelSelector() {
+  var bar = document.getElementById('modelSelectorBar');
+  if (!bar) return;
+  if (!APP.d.modelNames || APP.d.modelNames.length <= 1) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  var opts = ['all'].concat(APP.d.modelNames);
+  bar.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;">' +
+    '<span style="font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:2px;">Model:</span>' +
+    opts.map(function(name) {
+      var active = name === APP._activeModel;
+      var label  = name === 'all' ? 'All Models' : name;
+      return '<button onclick="setActiveModel(' + JSON.stringify(name) + ')" ' +
+        'style="padding:3px 12px;border-radius:20px;border:1px solid ' + (active?'var(--blue)':'var(--border)') + ';' +
+        'background:' + (active?'rgba(59,130,246,.15)':'transparent') + ';' +
+        'color:' + (active?'var(--blue)':'var(--muted)') + ';' +
+        'cursor:pointer;font-size:.73rem;font-weight:' + (active?'600':'400') + ';transition:all .15s;">' +
+        label + '</button>';
+    }).join('') +
+    '</div>';
+}
+
+function setActiveModel(name) {
+  APP._activeModel = name;
+  APP.pg.bd.page = 1;
+  APP.pg.sd.page = 1;
+  APP._skuExpanded = new Set();
+  APP._brandExpanded = new Set();
+  APP._variantExpanded = new Set();
+  APP._brandErrorImgExpanded = {};
+  APP._variantErrorImgExpanded = {};
+  renderAll();
+}
+
 function renderAll() {
   const rows = filteredRows();
   renderHeadlineStats(rows);
   renderKPIs(computeMetrics(rows));
   renderFilters();
+  renderModelSelector();
   renderActiveTabContent(rows);
 }
 
@@ -2790,41 +2962,50 @@ function getHistory() {
 }
 
 function saveSnapshot() {
-  var allRows = APP.d.rows;
-  if (!allRows.length) return;
-  var m = computeMetrics(allRows);
+  if (!APP.d.rows.length) return;
 
-  var brandArr = buildBrandAccuracy(allRows);
-  var brandStats = {};
-  brandArr.forEach(function(b) { brandStats[b.brand] = { correct:b.correct, total:b.total, accuracy:b.accuracy }; });
+  var names = APP.d.modelNames && APP.d.modelNames.length ? APP.d.modelNames : [APP.d.modelId || 'default'];
 
-  var varArr = buildVariantAccuracy(allRows);
-  var variantStats = {};
-  varArr.forEach(function(v) { variantStats[v.label] = { correct:v.correct, total:v.total, accuracy:v.accuracy }; });
+  names.forEach(function(modelName) {
+    var modelRows = APP.d.rows.filter(function(r) { return r._model === modelName; });
+    if (!modelRows.length) return;
 
-  var skuArr = buildSkuAccuracy(allRows).slice(0, 150);
-  var skuStats = {};
-  skuArr.forEach(function(s) { skuStats[s.sku] = { correct:s.correct, total:s.total, accuracy:s.accuracy, errorCount:s.errorCount }; });
+    var date = (modelRows[0] && modelRows[0]._fileDate) ? modelRows[0]._fileDate :
+               (APP.d.date || new Date().toISOString().split('T')[0]);
+    var m = computeMetrics(modelRows);
 
-  var snapshot = {
-    id: APP.d.modelId + '__' + APP.d.date,
-    modelId: APP.d.modelId,
-    date: APP.d.date,
-    label: APP.d.modelId + ' (' + APP.d.date + ')',
-    savedAt: new Date().toISOString(),
-    kpis: { acc:m.acc, p:m.p, r:m.r, f1:m.f1, total:m.total },
-    brandStats: brandStats,
-    variantStats: variantStats,
-    skuStats: skuStats
-  };
+    var brandArr = buildBrandAccuracy(modelRows);
+    var brandStats = {};
+    brandArr.forEach(function(b) { brandStats[b.brand] = { correct:b.correct, total:b.total, accuracy:b.accuracy }; });
 
-  var history = getHistory();
-  var idx = history.findIndex(function(h) { return h.id === snapshot.id; });
-  if (idx >= 0) history[idx] = snapshot;
-  else history.push(snapshot);
+    var varArr = buildVariantAccuracy(modelRows);
+    var variantStats = {};
+    varArr.forEach(function(v) { variantStats[v.label] = { correct:v.correct, total:v.total, accuracy:v.accuracy }; });
 
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
-  catch(e) { console.warn('Could not save snapshot:', e); }
+    var skuArr = buildSkuAccuracy(modelRows).slice(0, 150);
+    var skuStats = {};
+    skuArr.forEach(function(s) { skuStats[s.sku] = { correct:s.correct, total:s.total, accuracy:s.accuracy, errorCount:s.errorCount }; });
+
+    var snapshot = {
+      id: modelName + '__' + date,
+      modelId: modelName,
+      date: date,
+      label: modelName + ' (' + date + ')',
+      savedAt: new Date().toISOString(),
+      kpis: { acc:m.acc, p:m.p, r:m.r, f1:m.f1, total:m.total },
+      brandStats: brandStats,
+      variantStats: variantStats,
+      skuStats: skuStats
+    };
+
+    var history = getHistory();
+    var idx = history.findIndex(function(h) { return h.id === snapshot.id; });
+    if (idx >= 0) history[idx] = snapshot;
+    else history.push(snapshot);
+
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
+    catch(e) { console.warn('Could not save snapshot:', e); }
+  });
 }
 
 function deleteSnapshot(id) {
@@ -2845,7 +3026,111 @@ var TREND_COLORS = [
   '#f97316','#84cc16','#ec4899','#14b8a6','#a78bfa','#fb923c'
 ];
 
+function renderComparisonSection() {
+  var sec = document.getElementById('trendsComparisonSection');
+  if (!sec) return;
+  if (!APP.d.modelNames || APP.d.modelNames.length < 2) { sec.innerHTML = ''; return; }
+
+  var accLevel   = APP._trendsAccLevel || 'brand';
+  var compFilter = APP._trendsFilter   || 'all';
+
+  var btnStyle = function(active) {
+    return 'padding:3px 12px;border-radius:20px;border:1px solid '+(active?'var(--blue)':'var(--border)')+';' +
+      'background:'+(active?'rgba(59,130,246,.15)':'transparent')+';color:'+(active?'var(--blue)':'var(--muted)')+';' +
+      'cursor:pointer;font-size:.72rem;font-weight:'+(active?'600':'400')+';transition:all .15s;';
+  };
+
+  var filterBar = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:.72rem;color:var(--muted);font-weight:600;">Accuracy:</span>' +
+    ['brand','variant','sku'].map(function(lvl) {
+      return '<button style="'+btnStyle(lvl===accLevel)+'" onclick="APP._trendsAccLevel=\''+lvl+'\';renderComparisonSection()">'+
+        lvl.charAt(0).toUpperCase()+lvl.slice(1)+'</button>';
+    }).join('') + '</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:.72rem;color:var(--muted);font-weight:600;">Filter:</span>' +
+    [{val:'all',label:'All'},{val:'self',label:'Self'},{val:'competitor',label:'Competitor'}].map(function(o) {
+      return '<button style="'+btnStyle(o.val===compFilter)+'" onclick="APP._trendsFilter=\''+o.val+'\';renderComparisonSection()">'+o.label+'</button>';
+    }).join('') + '</div></div>';
+
+  // Compute per (model, date) accuracy
+  var rows = APP.d.rows;
+  if (compFilter !== 'all') rows = rows.filter(function(r) { return (r.comp||'').toLowerCase() === compFilter; });
+
+  var dateSet = new Set();
+  rows.forEach(function(r) { if (r._fileDate) dateSet.add(r._fileDate); });
+  var dates = Array.from(dateSet).sort();
+
+  if (!dates.length) {
+    sec.innerHTML = '<div class="card" style="margin-bottom:16px;"><div style="font-size:.87rem;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px;"><i class="fas fa-chart-line" style="color:var(--blue);"></i>Model Comparison</div>' +
+      '<div class="empty" style="padding:20px;">No date information found in the uploaded files. Make sure files contain a <code>date</code> column.</div></div>';
+    return;
+  }
+
+  var modelData = {};
+  APP.d.modelNames.forEach(function(model) {
+    modelData[model] = {};
+    dates.forEach(function(date) {
+      var mrs = rows.filter(function(r) { return r._model === model && r._fileDate === date; });
+      if (!mrs.length) return;
+      var correct = 0;
+      mrs.forEach(function(r) {
+        var ok = accLevel === 'brand' ? (r.pred_brand === r.gt_brand) :
+                 accLevel === 'variant' ? (r.pred_brand === r.gt_brand && r.pred_variant === r.gt_variant) :
+                 (r.is_correct === true);
+        if (ok) correct++;
+      });
+      modelData[model][date] = { correct:correct, total:mrs.length, accuracy: correct/mrs.length };
+    });
+  });
+
+  var tableRows = APP.d.modelNames.map(function(model, mi) {
+    var color = TREND_COLORS[mi % TREND_COLORS.length];
+    return '<tr>' +
+      '<td class="left" style="color:'+color+';font-weight:600;">'+model+'</td>' +
+      dates.map(function(date) {
+        var d = modelData[model][date];
+        return '<td style="font-weight:500;">' + (d ? pct(d.accuracy) : '–') + '</td>';
+      }).join('') + '</tr>';
+  }).join('');
+
+  sec.innerHTML = '<div class="card" style="margin-bottom:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
+    '<i class="fas fa-chart-line" style="color:var(--blue);"></i>' +
+    '<span style="font-size:.87rem;font-weight:700;color:var(--text);">Model Comparison</span>' +
+    '<span style="font-size:.72rem;color:var(--muted);font-weight:400;">('+ APP.d.modelNames.length +' models, '+dates.length+' date'+(dates.length!==1?'s':'')+' · from uploaded files)</span>' +
+    '</div>' + filterBar +
+    '<div style="height:320px;"><canvas id="trendsCompChart"></canvas></div>' +
+    '<div class="tbl-wrap" style="margin-top:14px;"><table class="tbl"><thead><tr>' +
+    '<th class="left">Model</th>' + dates.map(function(d){ return '<th>'+d+'</th>'; }).join('') +
+    '</tr></thead><tbody>' + tableRows + '</tbody></table></div></div>';
+
+  if (APP._trendsCompChart) { APP._trendsCompChart.destroy(); APP._trendsCompChart = null; }
+  var canvas = document.getElementById('trendsCompChart');
+  if (canvas && dates.length) {
+    var datasets = APP.d.modelNames.map(function(model, mi) {
+      var color = TREND_COLORS[mi % TREND_COLORS.length];
+      return { label:model, borderColor:color, backgroundColor:color+'18', tension:.3,
+        fill:false, pointRadius:6, borderWidth:2, spanGaps:true,
+        data:dates.map(function(date){ var d=modelData[model][date]; return d?+(d.accuracy*100).toFixed(1):null; }) };
+    });
+    APP._trendsCompChart = new Chart(canvas, {
+      type:'line', data:{ labels:dates, datasets:datasets },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:getChartDefaults().tickColor, font:{size:10}, boxWidth:12 } },
+          tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+c.raw+'%'; } } } },
+        scales:{
+          x:{ ticks:{ color:getChartDefaults().textColor, font:{size:10} }, grid:{ color:getChartDefaults().gridColor } },
+          y:{ min:0, max:100, ticks:{ color:getChartDefaults().textColor, font:{size:10}, callback:function(v){ return v+'%'; } }, grid:{ color:getChartDefaults().gridColor } }
+        }
+      }
+    });
+  }
+}
+
 function renderTrendsTab() {
+  renderComparisonSection();
   var history = getHistory().sort(function(a,b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
   renderHistoryTable(history);
@@ -3058,12 +3343,20 @@ function toggleTrendItem(type, item) {
 }
 
 function resetAll() {
-  ['det','iq','md'].forEach(function(k) {
+  // Reset detection slots
+  APP.files.dets = [{file: null, modelName: ''}];
+  APP.raw.dets = [];
+  APP.raw.det = null;
+  renderDetSlots();
+
+  // Reset iq and md
+  ['iq','md'].forEach(function(k) {
     APP.files[k] = null; APP.raw[k] = null;
     document.getElementById('zone-' + k).classList.remove('staged');
     document.getElementById('staged-' + k).style.display = 'none';
     document.getElementById('inp-' + k).value = '';
   });
+
   if (APP.charts.c1) { APP.charts.c1.destroy(); APP.charts.c1 = null; }
   if (APP.charts.c2) { APP.charts.c2.destroy(); APP.charts.c2 = null; }
   if (APP.charts.c3) { APP.charts.c3.destroy(); APP.charts.c3 = null; }
@@ -3071,10 +3364,18 @@ function resetAll() {
   ['c5','c6','c7','c8'].forEach(function(k) { if (APP.charts[k]) { APP.charts[k].destroy(); APP.charts[k] = null; } });
   Object.values(APP._variantBreakdownCharts).forEach(function(c) { if (c) c.destroy(); });
   APP._variantBreakdownCharts = {};
+  if (APP._trendsCompChart) { APP._trendsCompChart.destroy(); APP._trendsCompChart = null; }
+
   APP._trendBrands = []; APP._trendVariants = []; APP._trendSkus = [];
+  APP._activeModel = 'all';
+  APP._trendsAccLevel = 'brand';
+  APP._trendsFilter = 'all';
+  APP.d.modelNames = [];
+
   document.getElementById('processBtn').disabled = true;
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('uploadScreen').style.display = 'flex';
+
   APP._skuExpanded = new Set();
   APP._skuQ = '';
   APP._pivotSku = [];
@@ -3091,11 +3392,6 @@ function resetAll() {
   APP._variantGroupBy = 'brand+attr';
   APP._variantErrorImgExpanded = {};
 }
-// Set date input to today on load
-(function() {
-  var d = document.getElementById('inp-runDate');
-  if (d) d.value = new Date().toISOString().split('T')[0];
-})();
 
 // ── Theme ──────────────────────────────────────────────────────
 var THEME_KEY = 'cci_theme';

@@ -806,6 +806,7 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2026 | topStats bar updated: shows model count + date range instead of model ID + single date |
 | June 2026 | Warm Shelves compatibility investigation: `CGC_New_15th June.csv` covers Coolers only (59/256 GT match for Warm Shelves); generated `New/WarmShelves_Masterdata.csv` by promoting Display Name attribute_value to class_name (252/256 match) |
 | June 2026 | HANDOFF.md updated for session 6 |
+| June 2026 | **Session 7:** SKU Analysis drill-down changed from brand-level to SKU-level — `buildSkuAccuracy` now groups errors by `r.pred` (predicted Display Name) instead of `getPredBrandLabel(r)` (brand); `buildDrillContent` gains optional 4th `label` param (default `'Brand'`); SKU tab passes `'SKU'` so headers say "Predicted SKU" and "Misclassified as (sku)" |
 
 ---
 

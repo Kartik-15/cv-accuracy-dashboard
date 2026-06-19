@@ -416,8 +416,12 @@
               </div>
               <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Sorted by most errors first. Expand a row to see misclassification breakdown and affected images.</div>
             </div>
-            <input type="search" id="skuSearch" placeholder="Search SKU or brand…" style="width:210px;" oninput="APP._skuQ=this.value;renderSkuAccuracy()">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <div id="skuFilterBar"></div>
+              <input type="search" id="skuSearch" placeholder="Search SKU or brand…" style="width:210px;" oninput="APP._skuQ=this.value;renderSkuAccuracy()">
+            </div>
           </div>
+          <div id="skuStatChips" style="margin-bottom:12px;"></div>
           <div class="tbl-wrap" style="max-height:600px;">
             <table class="tbl"><thead id="skuHead"></thead><tbody id="skuBody"></tbody></table>
           </div>
@@ -561,6 +565,8 @@ const APP = {
   _brandDemoFilter: 'all',
   _brandErrorImgExpanded: {},
   _variantAccuracyFilter: 'all',
+  _skuAccuracyFilter: 'all',
+  _skuBucketFilter: 'all',
   _variantAttrKey: '',
   _variantGroupBy: 'brand+attr',
   _variantErrorImgExpanded: {},
@@ -1159,6 +1165,8 @@ async function processData() {
   APP._skuExpanded = new Set();
   APP._skuQ = '';
   APP._pivotSku = [];
+  APP._skuAccuracyFilter = 'all';
+  APP._skuBucketFilter = 'all';
   APP._brandExpanded = new Set();
   APP._variantExpanded = new Set();
   APP._pivotBrand = [];
@@ -1872,6 +1880,18 @@ function setVariantAccuracyFilter(val) {
   renderVariantBreakdownCharts();
 }
 
+function setSkuAccuracyFilter(val) {
+  APP._skuAccuracyFilter = val;
+  APP._skuExpanded = new Set();
+  renderSkuAccuracy();
+}
+
+function setSkuBucketFilter(val) {
+  APP._skuBucketFilter = val;
+  APP._skuExpanded = new Set();
+  renderSkuAccuracy();
+}
+
 function setVariantAttrKey(key) {
   APP._variantAttrKey = key;
   APP._variantExpanded = new Set();
@@ -2242,12 +2262,14 @@ function buildImgChips(imgs) {
   }).join('');
 }
 
-function buildDrillContent(errors, total, colspan) {
-  // errors = { brandName: { count: N, imgs: { sid: {sid,fp,quality} } } }
+function buildDrillContent(errors, total, colspan, label) {
+  // errors = { key: { count: N, imgs: { sid: {sid,fp,quality} } } }
+  // label: 'SKU' | 'Brand' (default 'Brand')
+  label = label || 'Brand';
   const entries = Object.entries(errors).sort(function(a,b) { return b[1].count - a[1].count; });
 
   const tableRows = entries.map(function(entry) {
-    const brandName = entry[0], data = entry[1];
+    const keyName = entry[0], data = entry[1];
     const cnt  = data.count;
     const imgs = Object.values(data.imgs).slice(0, 6);
     const chips = imgs.length
@@ -2255,7 +2277,7 @@ function buildDrillContent(errors, total, colspan) {
       : '<span style="font-size:.7rem;color:var(--muted);font-style:italic;">no image URL</span>';
 
     return '<tr style="border-bottom:1px solid rgba(31,41,55,.5);">' +
-      '<td style="text-align:left;padding:5px 14px 5px 0;font-size:.79rem;color:var(--text);white-space:nowrap;font-weight:500;">' + brandName + '</td>' +
+      '<td style="text-align:left;padding:5px 14px 5px 0;font-size:.79rem;color:var(--text);white-space:nowrap;font-weight:500;">' + keyName + '</td>' +
       '<td style="text-align:right;padding:5px 12px;font-size:.79rem;color:var(--red);font-weight:600;">' + cnt.toLocaleString() + '</td>' +
       '<td style="text-align:right;padding:5px 14px;font-size:.79rem;color:var(--muted);">' + (cnt/total*100).toFixed(1) + '%</td>' +
       '<td style="padding:5px 0 5px 4px;">' + chips + '</td>' +
@@ -2264,14 +2286,14 @@ function buildDrillContent(errors, total, colspan) {
 
   return '<tr><td colspan="' + colspan + '" style="padding:0;">' +
     '<div class="drill-wrap">' +
-    '<div class="drill-title"><i class="fas fa-arrow-turn-down" style="margin-right:5px;"></i>Misclassified as (brand) — ' + total + ' error' + (total>1?'s':'') + '</div>' +
+    '<div class="drill-title"><i class="fas fa-arrow-turn-down" style="margin-right:5px;"></i>Misclassified as (' + label.toLowerCase() + ') — ' + total + ' error' + (total>1?'s':'') + '</div>' +
     '<div style="overflow-x:auto;">' +
     '<table style="border-collapse:collapse;width:100%;">' +
     '<thead><tr>' +
-    '<th style="text-align:left;padding:3px 14px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted Brand</th>' +
+    '<th style="text-align:left;padding:3px 14px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted ' + label + '</th>' +
     '<th style="text-align:right;padding:3px 12px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Count</th>' +
     '<th style="text-align:right;padding:3px 14px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">% of Errors</th>' +
-    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Affected Images (up to 6 per brand)</th>' +
+    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Affected Images (up to 6 per ' + label.toLowerCase() + ')</th>' +
     '</tr></thead>' +
     '<tbody>' + tableRows + '</tbody>' +
     '</table></div></div></td></tr>';
@@ -2534,15 +2556,15 @@ function buildSkuAccuracy(rows) {
   for (const r of rows) {
     const sku = r.gt;
     if (!sku || _isBlankVal(sku)) continue;
-    if (!map[sku]) map[sku] = { sku, brand:r.gt_brand, correct:0, total:0, errors:{} };
+    if (!map[sku]) map[sku] = { sku, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
     map[sku].total++;
     if (r.is_correct) {
       map[sku].correct++;
     } else {
-      const pb = getPredBrandLabel(r);
-      if (!map[sku].errors[pb]) map[sku].errors[pb] = { count:0, imgs:{} };
-      map[sku].errors[pb].count++;
-      if (!map[sku].errors[pb].imgs[r.sid]) map[sku].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+      const predSku = r.pred || 'Unknown';
+      if (!map[sku].errors[predSku]) map[sku].errors[predSku] = { count:0, imgs:{} };
+      map[sku].errors[predSku].count++;
+      if (!map[sku].errors[predSku].imgs[r.sid]) map[sku].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
     }
   }
   return Object.values(map)
@@ -2551,8 +2573,58 @@ function buildSkuAccuracy(rows) {
 }
 
 function renderSkuAccuracy() {
+  const f  = APP._skuAccuracyFilter || 'all';
+  const bf = APP._skuBucketFilter   || 'all';
+
+  renderFilterToggle('skuFilterBar', f, 'setSkuAccuracyFilter', [
+    {val:'all', label:'All'},
+    {val:'self', label:'Self'},
+    {val:'competitor', label:'Competitor'}
+  ]);
+
   const q = (APP._skuQ || '').toLowerCase();
   let data = buildSkuAccuracy(filteredRows());
+  if (f === 'self')            data = data.filter(function(s) { return s.competition === 'self'; });
+  else if (f === 'competitor') data = data.filter(function(s) { return s.competition !== 'self'; });
+
+  // Compute bucket counts on self/comp-filtered data (before bucket filter + search)
+  var total  = data.length;
+  var gt90   = data.filter(function(s) { return s.accuracy > 0.90; }).length;
+  var r80to90= data.filter(function(s) { return s.accuracy > 0.80 && s.accuracy <= 0.90; }).length;
+  var r60to80= data.filter(function(s) { return s.accuracy > 0.60 && s.accuracy <= 0.80; }).length;
+  var lt60   = data.filter(function(s) { return s.accuracy <= 0.60; }).length;
+
+  // Render stat chips (also serve as bucket filter buttons)
+  var chips = [
+    { val:'all',     label:'Total SKUs', count:total,   color:'var(--blue)',  bg:'rgba(59,130,246,.12)',  border:'rgba(59,130,246,.35)'  },
+    { val:'gt90',    label:'>90%',       count:gt90,    color:'var(--green)', bg:'rgba(16,185,129,.12)',  border:'rgba(16,185,129,.35)'  },
+    { val:'80to90',  label:'80–90%',     count:r80to90, color:'var(--amber)', bg:'rgba(245,158,11,.12)',  border:'rgba(245,158,11,.35)'  },
+    { val:'60to80',  label:'60–80%',     count:r60to80, color:'#f97316',      bg:'rgba(249,115,22,.12)',  border:'rgba(249,115,22,.35)'  },
+    { val:'lt60',    label:'<60%',       count:lt60,    color:'var(--red)',   bg:'rgba(239,68,68,.12)',   border:'rgba(239,68,68,.35)'   }
+  ];
+  var chipEl = document.getElementById('skuStatChips');
+  if (chipEl) {
+    chipEl.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+      chips.map(function(c) {
+        var active = c.val === bf;
+        return '<button onclick="setSkuBucketFilter(\'' + c.val + '\')" style="' +
+          'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;' +
+          'border:1px solid ' + (active ? c.border : 'var(--border)') + ';' +
+          'background:' + (active ? c.bg : 'transparent') + ';' +
+          'transition:all .15s;">' +
+          '<span style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:' + (active ? c.color : 'var(--muted)') + ';">' + c.label + '</span>' +
+          '<span style="font-size:1.05rem;font-weight:700;color:' + (active ? c.color : 'var(--text)') + ';line-height:1;">' + c.count.toLocaleString() + '</span>' +
+        '</button>';
+      }).join('') +
+    '</div>';
+  }
+
+  // Apply bucket filter
+  if (bf === 'gt90')   data = data.filter(function(s) { return s.accuracy > 0.90; });
+  else if (bf === '80to90') data = data.filter(function(s) { return s.accuracy > 0.80 && s.accuracy <= 0.90; });
+  else if (bf === '60to80') data = data.filter(function(s) { return s.accuracy > 0.60 && s.accuracy <= 0.80; });
+  else if (bf === 'lt60')   data = data.filter(function(s) { return s.accuracy <= 0.60; });
+
   if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.brand || '').toLowerCase().includes(q); });
   data = applySort(data, 'sku');
   APP._pivotSku = data;
@@ -2591,7 +2663,7 @@ function renderSkuAccuracy() {
       '<td>' + accBar(s.accuracy) + '</td>' +
       '</tr>';
 
-    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(s.errors, s.errorCount, 7) : '';
+    const drillRow = (isExpanded && hasErrors) ? buildDrillContent(s.errors, s.errorCount, 7, 'SKU') : '';
     return mainRow + drillRow;
   }).join('');
 }
@@ -3379,6 +3451,8 @@ function resetAll() {
   APP._skuExpanded = new Set();
   APP._skuQ = '';
   APP._pivotSku = [];
+  APP._skuAccuracyFilter = 'all';
+  APP._skuBucketFilter = 'all';
   APP._brandExpanded = new Set();
   APP._variantExpanded = new Set();
   APP._pivotBrand = [];

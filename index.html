@@ -407,6 +407,7 @@
 
       <!-- Tab: SKU Analysis -->
       <div id="tcontent-sku" style="display:none;">
+        <div id="skuCoverageCard" class="card" style="margin-bottom:16px;"></div>
         <div class="card">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
             <div>
@@ -2572,7 +2573,84 @@ function buildSkuAccuracy(rows) {
     .sort(function(a,b) { return b.errorCount - a.errorCount; });
 }
 
+function renderSkuCoverageCard() {
+  var el = document.getElementById('skuCoverageCard');
+  if (!el) return;
+
+  // Masterdata universe (fixed — not affected by sidebar filters)
+  var mdAll = 0, mdSelf = 0, mdComp = 0;
+  Object.values(APP.d.mMap).forEach(function(entry) {
+    mdAll++;
+    if (entry.competition === 'self') mdSelf++;
+    else mdComp++;
+  });
+
+  // Detected: unique GT display names across ALL uploaded rows (unfiltered)
+  // — coverage is a dataset property, not a filter-slice property
+  var detAll = new Set(), detSelf = new Set(), detComp = new Set();
+  APP.d.rows.forEach(function(r) {
+    if (!r.gt || _isBlankVal(r.gt)) return;
+    var key = r.gt.toLowerCase();
+    if (!APP.d.mMap[key]) return;
+    detAll.add(key);
+    if (r.gt_comp === 'self') detSelf.add(key);
+    else detComp.add(key);
+  });
+
+  var dAll  = detAll.size,  dSelf  = detSelf.size,  dComp  = detComp.size;
+  var missing = mdAll - dAll;
+
+  function pct(n, d) { return d > 0 ? (n / d * 100) : 0; }
+  function pctStr(n, d) { return d > 0 ? (n / d * 100).toFixed(1) + '%' : '—'; }
+
+  function coverageColor(p) {
+    if (p >= 90) return 'var(--green)';
+    if (p >= 70) return 'var(--amber)';
+    return 'var(--red)';
+  }
+
+  function segmentHTML(label, detected, total, color) {
+    var p   = pct(detected, total);
+    var col = coverageColor(p);
+    return '<div style="flex:1;min-width:160px;background:var(--card2);border-radius:10px;padding:16px 18px;border:1px solid var(--border);">' +
+      '<div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:' + color + ';margin-bottom:10px;">' + label + '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">' +
+        '<span style="font-size:1.6rem;font-weight:800;line-height:1;color:var(--text);">' + detected.toLocaleString() + '</span>' +
+        '<span style="font-size:.85rem;color:var(--muted);">/ ' + total.toLocaleString() + '</span>' +
+        '<span style="font-size:.75rem;color:var(--muted);">SKUs</span>' +
+      '</div>' +
+      '<div style="height:6px;border-radius:99px;background:var(--border);margin-bottom:6px;overflow:hidden;">' +
+        '<div style="height:100%;width:' + Math.min(p,100).toFixed(1) + '%;background:' + col + ';border-radius:99px;transition:width .4s ease;"></div>' +
+      '</div>' +
+      '<div style="font-size:.8rem;font-weight:700;color:' + col + ';">' + pctStr(detected, total) + ' covered</div>' +
+    '</div>';
+  }
+
+  var warnHTML = '';
+  if (missing > 0) {
+    warnHTML = '<div style="margin-top:14px;padding:8px 14px;border-radius:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);font-size:.75rem;color:var(--amber);display:flex;align-items:center;gap:7px;">' +
+      '<i class="fas fa-triangle-exclamation"></i>' +
+      '<span><strong>' + missing.toLocaleString() + ' masterdata SKU' + (missing !== 1 ? 's' : '') + '</strong> have no GT observations in the uploaded accuracy data.</span>' +
+    '</div>';
+  }
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
+      '<i class="fas fa-layer-group" style="color:var(--blue);"></i>' +
+      '<span style="font-size:.87rem;font-weight:700;color:var(--text);">SKU Coverage</span>' +
+      '<span style="font-size:.72rem;color:var(--muted);font-weight:400;">— masterdata universe vs. accuracy sheet</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+      segmentHTML('All SKUs',        dAll,  mdAll,  'var(--blue)')  +
+      segmentHTML('Self',            dSelf, mdSelf, 'var(--green)') +
+      segmentHTML('Competitor',      dComp, mdComp, 'var(--violet)')+
+    '</div>' +
+    warnHTML;
+}
+
 function renderSkuAccuracy() {
+  renderSkuCoverageCard();
+
   const f  = APP._skuAccuracyFilter || 'all';
   const bf = APP._skuBucketFilter   || 'all';
 

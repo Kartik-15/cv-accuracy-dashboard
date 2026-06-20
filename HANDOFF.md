@@ -30,11 +30,11 @@ Deployment: GitHub Pages, served from `main` branch root. `.nojekyll` file preve
 | `RA Accuracy.xlsx` | **UTILITY** | Earlier accuracy sheet; same schema |
 
 ### Current Objective
-Multi-model trend tracking is live. Next work: polish the Trends tab (currently uses localStorage history; update it to use the new multi-model in-session data as the primary view), then apply the same filter/export/drill-down pattern to the SKU Analysis tab.
+SKU Analysis tab is now fully overhauled (session 7): SKU-level drill-down, Self/Competitor filter, accuracy bucket stat chips, and a SKU Coverage card. Next: export CSV for SKU accuracy table, MSL feature, and Trends tab polish.
 
 ### Immediate Next Steps
 1. Verify multi-model upload flow end-to-end with real files (2+ models, same masterdata).
-2. SKU Analysis tab: add Self/Competitor filter, export CSV with image links, two-level image drill-down (model after Brand Analysis implementation).
+2. SKU Analysis tab: export CSV with image links (mirrors Brand Accuracy export pattern).
 3. Implement MSL feature: add a file upload zone for store-level MSL file, join on store/session ID, append MSL compliance columns to the Size Demo table.
 4. Test with larger datasets to identify in-browser performance limits.
 
@@ -42,8 +42,8 @@ Multi-model trend tracking is live. Next work: polish the Trends tab (currently 
 
 | Path | Why |
 |------|-----|
+| `index.html` `renderSkuAccuracy` / `buildSkuAccuracy` | Add export CSV button (image URLs per error SKU) |
 | `index.html` `renderTrendsTab` / `renderComparisonSection` | Polish multi-model comparison chart |
-| `index.html` SKU Analysis tab | Add filter/export/drill-down matching Brand tab pattern |
 | `index.html` upload screen | Add zone for MSL file (future) |
 | `index.html` `buildSizeDemoRows` / `renderSizeDemo` | Inject MSL compliance columns (future) |
 
@@ -67,8 +67,10 @@ Multi-model trend tracking is live. Next work: polish the Trends tab (currently 
 12. **Brand Accuracy table** — Self/Competitor filter toggle; Export CSV button (exports all errors with image session IDs and image URLs per misclassified brand); two-level drill-down: click brand row → see error brand breakdown (counts only), click image icon on error brand → expand full image list for that brand.
 13. **Brand Demo table** — Self Misclassification = GT is 'self', pred is a *different* self brand (`r.comp === 'self' && gt_brand !== pred_brand`). Same-brand different-SKU falls to Others. Self/Competitor filter toggle. Paginated (25/page), searchable, CSV exportable.
 14. **Variant Analysis tab** — Fully overhauled (session 6). Attribute selector dropdown (pick any masterdata attribute, not just variant). Granularity toggle: "Brand+Attr" (e.g. "MAAZA · PET") vs "Attr only" (e.g. "PET"). Self/Competitor filter toggle. Export CSV button. Two-level drill-down: level 1 shows which attribute values it was misclassified as; level 2 expands images. Breakdown charts at bottom (one chart per checked filter value, shared label order — mirrors Brand Analysis pattern).
-15. **SKU Analysis tab** — SKU accuracy table sorted by error count descending, with click-to-expand misclassification drill-down + Size Demo card.
-16. **Size Demo card** (inside SKU Analysis tab) — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable. All columns sortable.
+15. **SKU Analysis tab** — Layout (top to bottom): (1) SKU Coverage card, (2) SKU Accuracy table, (3) Size Demo card.
+16. **SKU Coverage card** — Shows masterdata universe vs. accuracy-sheet coverage split by All / Self / Competitor. Counts from all uploaded rows (not sidebar-filtered) so coverage reflects the dataset, not a filter slice. Animated progress bar per segment; color-coded green ≥90% / amber ≥70% / red <70%. Warning banner when masterdata SKUs have zero GT observations.
+17. **SKU Accuracy table** — Self/Competitor/All filter toggle (`_skuAccuracyFilter`). Accuracy bucket stat chips above the table (Total / >90% / 80–90% / 60–80% / <60%) — each chip is also a clickable filter (`_skuBucketFilter`). Bucket counts are computed after the Self/Comp filter but before bucket filter, so they always reflect the tier breakdown for the current Self/Comp scope. Click-to-expand drill-down shows **predicted Display Name** (SKU-level), not brand. Up to 6 image chips per predicted SKU.
+18. **Size Demo card** (inside SKU Analysis tab) — Image-level aggregation for same-brand wrong-size errors. Paginated, searchable, CSV exportable. All columns sortable.
 17. **Trends tab** — Two sections: (1) **Model Comparison** — live comparison chart of all models uploaded this session: X = dates (from file), Y = accuracy %, one line per model name; toggle Brand/Variant/SKU; Self/Competitor filter; comparison table (rows = models, columns = dates). (2) **History** — localStorage-persisted KPI line chart (c5) + Brand/Variant/SKU trend selectors + charts (c6–c8); history table with per-run delete + Clear All. Key: `cci_accuracy_history_v1`.
 18. **Sidebar filters** — Fully dynamic from masterdata attributes. One filter section per attribute key plus Image Quality. All filters apply across all tabs simultaneously via `filteredRows()`. Reset All button. Empty/unknown/N/A values excluded via `_isBlankVal()`.
 19. **Configurable filter section picker** — Pill buttons at top of sidebar toggle which attribute filter sections are visible. Preference saved to localStorage (`cci_filter_sections_v2`). Default visible: Image Quality + Brand.
@@ -373,6 +375,8 @@ APP = {
   _skuExpanded: Set,
   _skuQ: string,
   _pivotSku: [],
+  _skuAccuracyFilter: 'all',  // 'all'|'self'|'competitor'
+  _skuBucketFilter: 'all',    // 'all'|'gt90'|'80to90'|'60to80'|'lt60'
   _trendBrands: [],
   _trendVariants: [],
   _trendSkus: [],
@@ -400,7 +404,8 @@ Accuracy Dashboard/
 │   │   ├── Main tab nav (Brand | Variant | SKU | Trends)  ← no Overview
 │   │   ├── Sidebar (filter section picker pills + dynamic attribute filter sections)
 │   │   └── Tab content divs
-│   │       └── Brand tab layout: #baFilterBar → baHead/baBody → Brand Demo → #brandBreakdownCharts
+│   │       ├── Brand tab layout: #baFilterBar → baHead/baBody → Brand Demo → #brandBreakdownCharts
+│   │       └── SKU tab layout: #skuCoverageCard → #skuFilterBar + #skuStatChips + #skuSearch → skuHead/skuBody → Size Demo
 │   └── JavaScript
 │       ├── APP state object
 │       ├── _BLANK_VALS / _isBlankVal(v)  — universal empty-value guard
@@ -440,7 +445,9 @@ Accuracy Dashboard/
 │       ├── renderModelPillBar(containerId)            ← NEW — renders model selector pills
 │       ├── renderTrendsTab / renderComparisonSection  ← overhauled session 6
 │       ├── renderKpiTrendChart (c5) / renderHistoryTable
+│       ├── renderSkuCoverageCard()                    ← NEW session 7 — masterdata vs detection coverage
 │       ├── buildSkuAccuracy / renderSkuAccuracy / toggleSkuDrillIdx
+│       ├── setSkuAccuracyFilter(val) / setSkuBucketFilter(val)  ← NEW session 7
 │       ├── getTopCompetitorBrandsForDemo / buildBrandDemoRows / renderBrandDemo
 │       ├── buildSizeDemoRows / renderSizeDemo
 │       ├── renderPag / changePg / exportCSV (brand_demo_sheet + size_demo_sheet)
@@ -697,7 +704,7 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 
 ### Important
 - **Verify multi-model upload end-to-end** with 2+ real files — confirm model filter pills, Trends comparison chart, and row tagging all work correctly.
-- **SKU Analysis tab**: add Self/Competitor filter, export CSV with image links, two-level image drill-down (model after Brand Analysis).
+- **SKU Analysis tab export CSV** — add export button (image URLs per error SKU, mirrors `exportBrandAccuracy` pattern). Self/Comp filter, bucket filter, coverage card, and SKU-level drill-down are all done.
 - **MSL feature:** Add file upload zone + MSL file parsing + join on store/session + MSL compliance columns in Size Demo table.
 
 ### Nice-to-Have
@@ -757,7 +764,7 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 - **`APP._sdBrands` is a side-effect of `buildSizeDemoRows`** — always call `buildSizeDemoRows` before reading `APP._sdBrands`.
 - **CSV export prepends UTF-8 BOM** (`﻿`) — intentional for Excel on Windows.
 - **Image URLs constructed as** `https://view.shelfwatch.io?url=${row.fp}` — `file_path` is the GCS URL.
-- **`buildDrillContent` takes 3 args**: `(errors, errorCount, colspan)`. Used by Variant and SKU tabs (inline image chips). Do NOT use for Brand tab — use `buildBrandDrillContent` instead.
+- **`buildDrillContent` takes 3–4 args**: `(errors, errorCount, colspan, label?)`. `label` defaults to `'Brand'`. Pass `'SKU'` from the SKU tab so headers read "Predicted SKU". Used by Variant and SKU tabs (inline image chips). Do NOT use for Brand tab — use `buildBrandDrillContent` instead.
 - **`buildBrandDrillContent` takes 4 args**: `(brandName, errors, errorCount, colspan)`. Brand-specific: no inline chips, click-to-expand image list per error brand.
 - **`getPredBrandLabel(r)` must be used** whenever mapping a prediction row to a brand key for error accumulation.
 - **"Self" not "CCI"** — all user-facing type labels use "Self" / "Competitor". Never hardcode "CCI" as a label.
@@ -807,6 +814,10 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2026 | Warm Shelves compatibility investigation: `CGC_New_15th June.csv` covers Coolers only (59/256 GT match for Warm Shelves); generated `New/WarmShelves_Masterdata.csv` by promoting Display Name attribute_value to class_name (252/256 match) |
 | June 2026 | HANDOFF.md updated for session 6 |
 | June 2026 | **Session 7:** SKU Analysis drill-down changed from brand-level to SKU-level — `buildSkuAccuracy` now groups errors by `r.pred` (predicted Display Name) instead of `getPredBrandLabel(r)` (brand); `buildDrillContent` gains optional 4th `label` param (default `'Brand'`); SKU tab passes `'SKU'` so headers say "Predicted SKU" and "Misclassified as (sku)" |
+| June 2026 | SKU Accuracy table: Self/Competitor/All filter toggle (`_skuAccuracyFilter` + `setSkuAccuracyFilter`) — same pattern as Brand/Variant tabs |
+| June 2026 | SKU Accuracy table: accuracy bucket stat chips (Total / >90% / 80–90% / 60–80% / <60%) above the table; each chip shows count and doubles as a filter button (`_skuBucketFilter` + `setSkuBucketFilter`); bucket counts always reflect Self/Comp scope before bucket filter is applied |
+| June 2026 | SKU Coverage card (`#skuCoverageCard`, rendered by `renderSkuCoverageCard()`): masterdata SKU universe vs. GT SKUs seen in accuracy data, split All / Self / Competitor; animated progress bars color-coded by coverage tier; warning banner when masterdata SKUs have no GT observations; uses `APP.d.rows` (unfiltered) so sidebar filters don't deflate coverage numbers |
+| June 2026 | HANDOFF.md updated for session 7 |
 
 ---
 
@@ -863,7 +874,7 @@ KEY RULES:
   - Breakdown charts: at BOTTOM of Brand Analysis tab; only when filter checkboxes checked;
     shared globalOrder (top-15 by combined volume) for all charts in a group
 
-APP STATE (key additions since session 6):
+APP STATE (key additions since session 7):
 APP = {
   files: { dets:[{file,modelName}], iq, md },  // ← dets is now an array
   d: { rows, qMap, mMap, ..., modelNames:[], dateRange:'' },
@@ -876,12 +887,27 @@ APP = {
   _variantGroupBy: 'brand+attr',
   _variantErrorImgExpanded: {},
   _variantBreakdownCharts: {},
+  _skuAccuracyFilter: 'all',    // ← NEW session 7: 'all'|'self'|'competitor'
+  _skuBucketFilter: 'all',      // ← NEW session 7: 'all'|'gt90'|'80to90'|'60to80'|'lt60'
   // ... rest unchanged from session 5
 }
 
 ENRICHED ROW NEW FIELDS (session 6):
   _model:    string  // model name from upload slot
   _fileDate: string  // YYYY-MM-DD from date column
+
+SKU TAB LAYOUT (session 7):
+  #skuCoverageCard  ← rendered by renderSkuCoverageCard(); uses APP.d.rows (unfiltered)
+  #skuFilterBar     ← Self/Comp/All toggle (renderFilterToggle → setSkuAccuracyFilter)
+  #skuStatChips     ← bucket chips rendered inline in renderSkuAccuracy()
+  #skuSearch        ← text search
+  skuHead/skuBody   ← SKU accuracy table; drill-down groups by r.pred (SKU-level, NOT brand)
+  Size Demo card
+
+SKU DRILL-DOWN (session 7):
+  buildSkuAccuracy groups errors by r.pred (predicted Display Name)
+  buildDrillContent called with label='SKU' → header = "Predicted SKU"
+  (Variant tab still calls buildDrillContent without label → defaults to 'Brand')
 
 MAIN_TABS = ['brand','variant','sku','trends']
 FILTER_SECTIONS_KEY = 'cci_filter_sections_v2'
@@ -891,8 +917,8 @@ HISTORY_KEY = 'cci_accuracy_history_v1'
 HEADLINE STATS (5 cards): Images | Unique Brands | Unique Groups | Unique Classes | Unique SKUs
 topStats bar now shows: N models · M dates · image count (no model ID / date fields)
 
-CURRENT STATUS: Multi-model upload + Variant Analysis overhaul + IQ optional all live.
-Next: SKU tab drill-down, verify multi-model flow end-to-end, MSL feature.
+CURRENT STATUS: SKU Analysis tab fully overhauled (session 7). Multi-model upload + Variant Analysis + IQ optional all live.
+Next: SKU tab export CSV, verify multi-model flow end-to-end, MSL feature.
 
 SAMPLE DATA FILES in same folder:
   - Accuracy Sheet.xlsx (detection data — use "Raw" sheet)

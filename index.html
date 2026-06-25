@@ -239,7 +239,7 @@
         <i class="fas fa-database" style="color:var(--violet);font-size:1.4rem;"></i>
       </div>
       <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Masterdata</div>
-      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Product catalog with brand, variant &amp; size attributes</div>
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px;">Product catalog with brand, variant &amp; size attributes<br><span style="font-size:.72rem;color:var(--violet);">Use: CGC CSV (attribute_name/value format) or Brand &amp; Variant CSV</span></div>
       <div style="font-size:.72rem;color:var(--muted);">XLSX or CSV · Drag &amp; drop or click</div>
       <div id="staged-md" style="display:none;margin-top:14px;background:rgba(16,185,129,.1);border-radius:8px;padding:8px 12px;align-items:center;justify-content:space-between;">
         <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:#10b981;">
@@ -335,8 +335,11 @@
       <!-- Headline stats (always visible) -->
       <div id="headlineStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;"></div>
 
-      <!-- KPI cards (4, always visible) -->
-      <div id="kpiRow" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;"></div>
+      <!-- KPI card (Object Accuracy only) -->
+      <div id="kpiRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,280px));gap:14px;margin-bottom:16px;"></div>
+
+      <!-- Data quality / masterdata gap section -->
+      <div id="dataQualitySection" style="margin-bottom:16px;"></div>
 
       <!-- Model selector (shown when 2+ models loaded) -->
       <div id="modelSelectorBar" style="display:none;margin-bottom:12px;"></div>
@@ -413,13 +416,14 @@
             <div>
               <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">
                 <i class="fas fa-microscope" style="color:var(--amber);"></i>SKU Accuracy
-                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(QC Display Name — click row to drill down)</span>
+                <span style="font-size:.72rem;color:var(--muted);font-weight:400;">(Display Name — click row to drill down)</span>
               </div>
               <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">Sorted by most errors first. Expand a row to see misclassification breakdown and affected images.</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
               <div id="skuFilterBar"></div>
               <input type="search" id="skuSearch" placeholder="Search SKU or brand…" style="width:210px;" oninput="APP._skuQ=this.value;renderSkuAccuracy()">
+              <button class="btn btn-ghost btn-sm" onclick="exportSkuAccuracy()"><i class="fas fa-download"></i> Export CSV</button>
             </div>
           </div>
           <div id="skuStatChips" style="margin-bottom:12px;"></div>
@@ -764,10 +768,10 @@ function normalizeQuality(q) {
 const COL_DEFS = {
   det: [
     { key:'session_id',     label:'Session / Image ID',        req:true,  cands:['session_id','image_id','cooler_session_id','test_image_id','sessionid'] },
-    { key:'qc_dn',          label:'GT — QC Display Name',      req:true,  cands:['qc_display name','qc display name','qc_display_name','ground_truth','gt'] },
-    { key:'dn',             label:'Prediction — Display Name', req:true,  cands:['display name','display_name','prediction','pred','ai_display_name'] },
+    { key:'qc_dn',          label:'GT — QC Display Name',      req:true,  cands:['gt_display_name','qc_display name','qc display name','qc_display_name','ground_truth','gt_class_name','gt'] },
+    { key:'dn',             label:'Prediction — Display Name', req:true,  cands:['ai_display_name','display name','display_name','prediction','pred','ai_class_name'] },
     { key:'competition',    label:'Competition Flag',           req:true,  cands:['competition','competition_flag','comp'] },
-    { key:'file_path',      label:'Image URL (file_path)',     req:false, cands:['file_path','filepath','image_url','url'] },
+    { key:'file_path',      label:'Image URL (file_path)',     req:false, cands:['file_path','filepath','image_url','image_link','url','link'] },
     { key:'quality',        label:'Embedded Quality (fallback)',req:false, cands:['quality','image quality','image_quality'] }
   ],
   iq: [
@@ -776,8 +780,8 @@ const COL_DEFS = {
   ],
   md: [
     { key:'class_name',  label:'Class Name',      req:true,  cands:['class_name','classname','class'] },
-    { key:'attr_name',   label:'Attribute Name',  req:true,  cands:['attribute_name','attr_name','attribute'] },
-    { key:'attr_value',  label:'Attribute Value', req:true,  cands:['attribute_value','attr_value','value'] },
+    { key:'attr_name',   label:'Attribute Name',  req:false, cands:['attribute_name','attr_name'] },
+    { key:'attr_value',  label:'Attribute Value', req:false, cands:['attribute_value','attr_value','value'] },
     { key:'competition', label:'Competition Flag', req:false, cands:['competition','competition_type'] }
   ]
 };
@@ -956,41 +960,95 @@ function buildMasterdataMap(rows, cols) {
   const byClass = {};
   for (const row of rows) {
     const cname = cl(row[cols.class_name]);
+    if (!cname) continue;
+
     const aname = cl(row[cols.attr_name]);
     const aval  = cl(row[cols.attr_value]);
     const comp  = cl(row[cols.competition] || '');
-    // group_name is a direct CSV column, not an attribute pair — read it from the row
     const gname = cl(row['group_name'] || row[cols.group_name] || '');
-    if (!cname) continue;
+
     if (!byClass[cname]) byClass[cname] = { competition: comp, _gname: gname };
     else {
       if (comp) byClass[cname].competition = comp;
       if (gname && !byClass[cname]._gname) byClass[cname]._gname = gname;
     }
-    if (aname) byClass[cname][aname] = aval;
+
+    // Long format: attribute_name / attribute_value pairs (CGC-style)
+    if (aname) {
+      byClass[cname][aname] = aval;
+      // Normalize known attribute names so lookups work regardless of casing in the CSV
+      var anL = aname.toLowerCase().trim();
+      if (anL === 'brand' || anL === 'brand name')           byClass[cname]['Brand']        = byClass[cname]['Brand']        || aval;
+      else if (anL === 'display name' || anL === 'display_name') byClass[cname]['Display Name'] = byClass[cname]['Display Name'] || aval;
+      else if (anL === 'variant' || anL === 'pack type')     byClass[cname]['Variant']      = byClass[cname]['Variant']      || aval;
+      else if (anL === 'competition' || anL === 'competition_type' || anL === 'competition flag') {
+        // Always keep the normalized competition value (lowercase) accessible under 'competition'
+        if (!byClass[cname].competition) byClass[cname].competition = aval;
+      }
+    }
+
+    // Wide format: Brand, Variant, Display Name as direct columns (Final Brand and Variant-style)
+    // Also: simplified CGC format where attribute_value IS the Display Name (no attribute_name column)
+    // Simplified CGC: attribute_value IS the Display Name when there's no separate attribute_name column
+    // (detected when attr_name is empty OR both attr_name and attr_value resolved to the same column)
+    const noAttrName = !cols.attr_name || cols.attr_name === cols.attr_value;
+    const attrValAsDN = (noAttrName && cols.attr_value) ? cl(row[cols.attr_value] || '') : '';
+    const wDN  = cl(row['Display Name'] || row['display_name'] || '') || attrValAsDN || cl(row['client_name'] || '');
+    const wBr  = cl(row['Brand'] || '');
+    const wVar = cl(row['Variant'] || row['Pack type'] || '');
+    if (wDN  && !byClass[cname]['Display Name']) byClass[cname]['Display Name'] = wDN;
+    if (wBr  && !byClass[cname]['Brand'])        byClass[cname]['Brand']        = wBr;
+    if (wVar && !byClass[cname]['Variant'] && !byClass[cname]['Pack type']) byClass[cname]['Variant'] = wVar;
   }
 
-  const SKIP_ATTR = new Set(['display name','display_name','display name ','competition']);
+  const SKIP_ATTR = new Set(['display name','display_name','display name ','competition','Competition','competition_type','Competition Type','competition flag','Competition Flag']);
   const map = {};
   for (const [cname, attrs] of Object.entries(byClass)) {
     const dn = cl(attrs['Display Name'] || attrs['display_name'] || attrs['display name'] || '');
-    if (!dn) continue;
-    const key = dn.toLowerCase();
-    // Build raw attrs map (all attributes except internal ones)
+
+    // Brand fallback: if no Brand attribute, derive from class_name (format: "BRAND, VARIANT SIZE")
+    var derivedBrand = cl(attrs['Brand'] || '');
+    if (!derivedBrand && cname.includes(',')) {
+      derivedBrand = cname.split(',')[0].trim();
+    }
+    // Variant fallback: full text after first comma (e.g. "THUMS UP, PET 500ML" -> "PET 500ML")
+    var derivedVariant = cl(attrs['Pack type'] || attrs['Variant'] || '');
+    if (!derivedVariant && cname.includes(',')) {
+      derivedVariant = cname.split(',').slice(1).join(',').trim();
+    }
+
     const rawAttrs = {};
     for (const [k, v] of Object.entries(attrs)) {
       if (!SKIP_ATTR.has(k.toLowerCase()) && v && v !== '') rawAttrs[k] = v;
     }
-    map[key] = {
-      brand:      cl(attrs['Brand'] || ''),
-      variant:    cl(attrs['Pack type'] || attrs['Variant'] || ''),
-      measure:    parseInt(cl(attrs['measure'] || '0')) || 0,
-      subcat:     cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
-      group:      cl(attrs._gname || attrs['group_name'] || attrs['Group Name'] || attrs['Group'] || ''),
-      class_name: cname,
-      competition: cl(attrs.competition || ''),
-      attrs: rawAttrs
+    const entry = {
+      brand:        derivedBrand,
+      variant:      derivedVariant,
+      measure:      parseInt(cl(attrs['measure'] || '0')) || 0,
+      subcat:       cl(attrs['Sub category'] || attrs['Sub Category'] || ''),
+      group:        cl(attrs._gname || attrs['group_name'] || attrs['Group Name'] || attrs['Group'] || ''),
+      class_name:   cname,
+      display_name: dn || cname,
+      competition:  cl(attrs.competition || attrs['Competition'] || attrs['competition_type'] || '').toLowerCase(),
+      attrs:        rawAttrs
     };
+    // Index by display name — prefer exact class_name match first, then brand-bearing entries.
+    // An entry whose class_name IS the display name (e.g. class "SPRITE" with dn "SPRITE") must
+    // never be overwritten by a different class that merely uses it as a display name
+    // (e.g. "DAILEE SPRITE 300ML" with dn "SPRITE") even if the latter has a brand.
+    if (dn) {
+      var existingDn = map[dn.toLowerCase()];
+      var curIsExact = cname.toLowerCase() === dn.toLowerCase();
+      var exIsExact  = existingDn && existingDn.class_name &&
+                       existingDn.class_name.toLowerCase() === dn.toLowerCase();
+      if (!existingDn ||
+          (curIsExact && !exIsExact) ||
+          (!curIsExact && !exIsExact && !existingDn.brand && entry.brand)) {
+        map[dn.toLowerCase()] = entry;
+      }
+    }
+    // Always index by class_name too — accuracy CSVs use class_name as the prediction/GT identifier
+    map[cname.toLowerCase()] = entry;
   }
   return map;
 }
@@ -1030,7 +1088,7 @@ function enrichRows(detRows, qMap, mMap, cols) {
       gt_measure:    gta.measure,
       gt_group:      gta.group,
       gt_class:      gta.class_name,
-      gt_comp:       gta.competition || (comp === 'self' ? '' : ''),
+      gt_comp:       (gta.competition || '').toLowerCase(),
       gt_attrs:      gta.attrs || {},
       pred_brand:    pra.brand,
       pred_variant:  pra.variant,
@@ -1045,6 +1103,43 @@ async function processData() {
   await tick();
 
   APP.d.mMap = buildMasterdataMap(getActiveRows('md'), APP.cfg.md.cols);
+  var _mdRows = getActiveRows('md');
+  console.log('[Masterdata] rows parsed:', _mdRows.length, '| mMap entries:', Object.keys(APP.d.mMap).length, '| cols:', JSON.stringify(APP.cfg.md.cols));
+
+  // ── Compute masterdata gap data (for data quality section) ──
+  (function() {
+    var gaps = { noBrand: [], noCompetition: [], conflictCompetition: [], conflictBrand: [], unmatchedGT: [] };
+    var seenCls = new Set();
+    // Collect per-class_name competition and brand sets from raw rows
+    var compByCls = {}, brandByCls = {};
+    _mdRows.forEach(function(row) {
+      var cname = cl(row[APP.cfg.md.cols.class_name]);
+      if (!cname) return;
+      var aname = cl(row[APP.cfg.md.cols.attr_name]).toLowerCase().trim();
+      var aval  = cl(row[APP.cfg.md.cols.attr_value]);
+      var comp  = cl(row[APP.cfg.md.cols.competition] || '').toLowerCase();
+      if (comp) { if (!compByCls[cname]) compByCls[cname] = new Set(); compByCls[cname].add(comp); }
+      if (aname === 'competition' || aname === 'competition_type' || aname === 'competition flag') {
+        if (!compByCls[cname]) compByCls[cname] = new Set(); compByCls[cname].add(aval.toLowerCase());
+      }
+      if (aname === 'brand' || aname === 'brand name') {
+        if (!brandByCls[cname]) brandByCls[cname] = new Set(); brandByCls[cname].add(aval);
+      }
+    });
+    // Scan unique mMap entries
+    Object.values(APP.d.mMap).forEach(function(entry) {
+      if (seenCls.has(entry.class_name)) return;
+      seenCls.add(entry.class_name);
+      if (!entry.brand) gaps.noBrand.push(entry.display_name || entry.class_name);
+      if (!entry.competition) gaps.noCompetition.push(entry.display_name || entry.class_name);
+      var cset = compByCls[entry.class_name];
+      if (cset && cset.size > 1) gaps.conflictCompetition.push(entry.display_name || entry.class_name);
+      var bset = brandByCls[entry.class_name];
+      if (bset && bset.size > 1) gaps.conflictBrand.push(entry.display_name || entry.class_name);
+    });
+    APP.d.gaps = gaps;
+  })();
+
   showOverlay('Building quality map…', 25); await tick();
 
   APP.d.qMap = buildQualityMap(getActiveRows('iq'), APP.cfg.iq.cols);
@@ -1096,6 +1191,15 @@ async function processData() {
   }
 
   APP.d.rows = allRows;
+  // Fill unmatched GT (GT classes not in masterdata)
+  if (APP.d.gaps) {
+    var _gtSeen = new Set();
+    APP.d.rows.forEach(function(r) {
+      if (!r.gt || _gtSeen.has(r.gt.toLowerCase())) return;
+      _gtSeen.add(r.gt.toLowerCase());
+      if (!APP.d.mMap[r.gt.toLowerCase()]) APP.d.gaps.unmatchedGT.push(r.gt);
+    });
+  }
   APP.d.modelNames = modelNames;
   APP.d.modelId = modelNames.length === 1 ? modelNames[0] : (modelNames.length + ' models');
   APP.d.date = Array.from(dateSet).sort().join(' – ');
@@ -1149,11 +1253,13 @@ async function processData() {
   var uniqueDates = Array.from(dateSet).sort();
   var modelCountLabel = modelNames.length + ' model' + (modelNames.length !== 1 ? 's' : '');
   var dateCountLabel  = uniqueDates.length + ' date' + (uniqueDates.length !== 1 ? 's' : '');
+  var mdClassCount = Object.keys(APP.d.mMap).length;
   document.getElementById('topStats').innerHTML =
     '<span><i class="fas fa-code-branch" style="color:var(--amber);margin-right:4px;"></i>' + modelCountLabel + '</span>' +
     '<span><i class="fas fa-calendar" style="color:var(--blue);margin-right:4px;"></i>' + dateCountLabel + '</span>' +
     '<span><i class="fas fa-images" style="color:var(--green);margin-right:4px;"></i>' + imgs.toLocaleString() + ' images</span>' +
-    '<span><i class="fas fa-check-circle" style="color:var(--violet);margin-right:4px;"></i>' + matched.toLocaleString() + ' quality-matched</span>';
+    '<span><i class="fas fa-database" style="color:var(--violet);margin-right:4px;"></i>' + mdClassCount.toLocaleString() + ' masterdata entries</span>' +
+    '<span><i class="fas fa-check-circle" style="color:var(--muted);margin-right:4px;"></i>' + matched.toLocaleString() + ' quality-matched</span>';
 
   showOverlay('Rendering…', 85); await tick();
 
@@ -1198,6 +1304,110 @@ async function processData() {
 
 const tick = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
 const unique = function(arr) { return [...new Set(arr.filter(function(v) { return v !== null && v !== undefined && v !== ''; }))]; };
+
+// ═══════════════════════════════════════════════════════════
+// DATA QUALITY / GAP DETECTION SECTION
+// ═══════════════════════════════════════════════════════════
+
+function renderDataQualitySection() {
+  var el = document.getElementById('dataQualitySection');
+  if (!el) return;
+  var g = APP.d.gaps;
+  if (!g) { el.innerHTML = ''; return; }
+
+  var totalGaps = g.noBrand.length + g.noCompetition.length + g.conflictCompetition.length +
+                  g.conflictBrand.length + g.unmatchedGT.length;
+  if (!totalGaps) { el.innerHTML = ''; return; }
+
+  var stateKey = 'dqs_collapsed';
+  var collapsed = !!APP[stateKey];
+
+  function gapBlock(icon, color, title, items, hint) {
+    if (!items.length) return '';
+    var MAX_SHOW = 6;
+    var shown = items.slice(0, MAX_SHOW).map(function(v) {
+      return '<span style="display:inline-flex;align-items:center;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:.72rem;color:var(--text);white-space:nowrap;">' + v + '</span>';
+    }).join('');
+    var more = items.length > MAX_SHOW ? '<span style="font-size:.71rem;color:var(--muted);margin-left:4px;">+' + (items.length - MAX_SHOW) + ' more</span>' : '';
+    return '<div style="margin-bottom:12px;padding:12px 14px;border-radius:8px;background:' + color + '08;border:1px solid ' + color + '28;">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+        '<i class="fas ' + icon + '" style="color:' + color + ';font-size:.8rem;"></i>' +
+        '<span style="font-size:.78rem;font-weight:700;color:' + color + ';">' + title + '</span>' +
+        '<span style="font-size:.7rem;color:var(--muted);margin-left:4px;">(' + items.length + ')</span>' +
+      '</div>' +
+      (hint ? '<div style="font-size:.7rem;color:var(--muted);margin-bottom:6px;">' + hint + '</div>' : '') +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + shown + more + '</div>' +
+    '</div>';
+  }
+
+  var body = collapsed ? '' :
+    gapBlock('fa-tag', '#f59e0b', 'Missing Brand',
+      g.noBrand, 'Masterdata SKUs with no Brand attribute — brand was inferred from class name prefix.') +
+    gapBlock('fa-flag', '#8b5cf6', 'Missing Competition Flag',
+      g.noCompetition, 'Masterdata SKUs with no Self/Competitor tag — these will not appear in Self or Competitor filters.') +
+    gapBlock('fa-exclamation-triangle', '#ef4444', 'Conflicting Competition',
+      g.conflictCompetition, 'Same SKU has both Self and Competitor competition values in masterdata — review these rows.') +
+    gapBlock('fa-clone', '#f97316', 'Conflicting Brand',
+      g.conflictBrand, 'Same class name has multiple distinct Brand values in masterdata — only the first was used.') +
+    gapBlock('fa-unlink', '#64748b', 'GT Classes with No Masterdata Match',
+      g.unmatchedGT, 'GT values in the detection file not found in masterdata — brand, variant, and competition will be blank for these.');
+
+  el.innerHTML =
+    '<div class="card" style="border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.03);">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="APP.dqs_collapsed=!APP.dqs_collapsed;renderDataQualitySection();">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<i class="fas fa-triangle-exclamation" style="color:var(--amber);font-size:.9rem;"></i>' +
+          '<span style="font-size:.85rem;font-weight:700;color:var(--text);">Masterdata Health</span>' +
+          '<span style="font-size:.72rem;color:var(--amber);font-weight:600;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:20px;padding:1px 8px;">' + totalGaps + ' gap' + (totalGaps !== 1 ? 's' : '') + '</span>' +
+        '</div>' +
+        '<i class="fas fa-chevron-' + (collapsed ? 'down' : 'up') + '" style="font-size:.65rem;color:var(--muted);"></i>' +
+      '</div>' +
+      (collapsed ? '' : '<div style="margin-top:12px;">' + body + '</div>') +
+    '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+// SKU EXPORT
+// ═══════════════════════════════════════════════════════════
+
+function exportSkuAccuracy() {
+  var f  = APP._skuAccuracyFilter || 'all';
+  var bf = APP._skuBucketFilter   || 'all';
+  var q  = (APP._skuQ || '').toLowerCase();
+  var data = buildSkuAccuracy(filteredRows());
+  if (f === 'self')            data = data.filter(function(s) { return s.competition === 'self'; });
+  else if (f === 'competitor') data = data.filter(function(s) { return s.competition && s.competition !== 'self'; });
+  if (bf === 'gt90')   data = data.filter(function(s) { return s.accuracy > 0.90; });
+  else if (bf === '80to90') data = data.filter(function(s) { return s.accuracy > 0.80 && s.accuracy <= 0.90; });
+  else if (bf === '60to80') data = data.filter(function(s) { return s.accuracy > 0.60 && s.accuracy <= 0.80; });
+  else if (bf === 'lt60')   data = data.filter(function(s) { return s.accuracy <= 0.60; });
+  if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.displayName||'').toLowerCase().includes(q) || (s.brand||'').toLowerCase().includes(q); });
+
+  var esc = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var headers = ['Display Name', 'Brand', 'Type', 'Total', 'Correct', 'Errors', 'Accuracy %', 'Predicted As', 'Error Count', '% of Errors', 'Image Session IDs', 'Image URLs'];
+  var csvRows = [];
+  data.forEach(function(s) {
+    var type = s.competition === 'self' ? 'Self' : (s.competition ? 'Competitor' : '—');
+    var entries = Object.entries(s.errors).sort(function(a, b) { return b[1].count - a[1].count; });
+    if (!entries.length) {
+      csvRows.push([s.displayName || s.sku, s.brand || '', type, s.total, s.correct, s.errorCount, (s.accuracy*100).toFixed(1), '', '', '', '', '']);
+      return;
+    }
+    entries.forEach(function(e) {
+      var errSku = e[0], errData = e[1];
+      var imgs = Object.values(errData.imgs);
+      var sids = imgs.map(function(i) { return i.sid; }).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? 'https://view.shelfwatch.io?url=' + i.fp : ''; }).filter(Boolean).join('; ');
+      csvRows.push([s.displayName || s.sku, s.brand || '', type, s.total, s.correct, s.errorCount, (s.accuracy*100).toFixed(1), errSku, errData.count, s.errorCount ? (errData.count/s.errorCount*100).toFixed(1) : '0', sids, urls]);
+    });
+  });
+  var csv = [headers.map(esc).join(',')].concat(csvRows.map(function(r) { return r.map(esc).join(','); })).join('\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = Object.assign(document.createElement('a'), { href: url, download: 'sku_accuracy.csv' });
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ═══════════════════════════════════════════════════════════
 // FILTERS
@@ -1475,25 +1685,20 @@ function renderHeadlineStats(rows) {
 }
 
 function renderKPIs(m) {
-  const cards = [
-    { label:'Object Accuracy', val: pct(m.acc), icon:'fa-bullseye',      col:kpiColor(m.acc), p:m.acc },
-    { label:'Macro Precision', val: pct(m.p),   icon:'fa-crosshairs',    col:kpiColor(m.p),   p:m.p },
-    { label:'Macro Recall',    val: pct(m.r),   icon:'fa-search',        col:kpiColor(m.r),   p:m.r },
-    { label:'F1-Score',        val: pct(m.f1),  icon:'fa-balance-scale', col:kpiColor(m.f1),  p:m.f1 }
-  ];
-
-  document.getElementById('kpiRow').innerHTML = cards.map(function(c) {
-    return '<div class="card" style="transition:all .2s;">' +
+  var col = kpiColor(m.acc);
+  document.getElementById('kpiRow').innerHTML =
+    '<div class="card" style="transition:all .2s;">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">' +
-      '<div style="width:36px;height:36px;background:' + c.col + '22;border-radius:9px;display:flex;align-items:center;justify-content:center;">' +
-      '<i class="fas ' + c.icon + '" style="color:' + c.col + ';font-size:.9rem;"></i>' +
-      '</div>' + kpiBadge(c.p) + '</div>' +
-      '<div style="font-size:1.55rem;font-weight:800;color:' + c.col + ';line-height:1;">' + c.val + '</div>' +
-      '<div style="font-size:.73rem;color:var(--muted);margin-top:5px;">' + c.label + '</div>' +
+        '<div style="width:36px;height:36px;background:' + col + '22;border-radius:9px;display:flex;align-items:center;justify-content:center;">' +
+          '<i class="fas fa-bullseye" style="color:' + col + ';font-size:.9rem;"></i>' +
+        '</div>' + kpiBadge(m.acc) +
+      '</div>' +
+      '<div style="font-size:1.55rem;font-weight:800;color:' + col + ';line-height:1;">' + pct(m.acc) + '</div>' +
+      '<div style="font-size:.73rem;color:var(--muted);margin-top:5px;">Object Accuracy</div>' +
       '<div style="background:var(--border);border-radius:3px;height:3px;overflow:hidden;margin-top:10px;">' +
-      '<div style="background:' + c.col + ';height:100%;width:' + (c.p*100).toFixed(1) + '%;border-radius:3px;transition:width .4s;"></div>' +
-      '</div></div>';
-  }).join('');
+        '<div style="background:' + col + ';height:100%;width:' + (m.acc*100).toFixed(1) + '%;border-radius:3px;transition:width .4s;"></div>' +
+      '</div>' +
+    '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1934,11 +2139,12 @@ function buildAttrAccuracy(rows, attrKey, groupBy) {
     if (isCorrect) {
       map[key].correct++;
     } else {
+      var predDN = predEntry && predEntry.display_name ? predEntry.display_name : '';
       var errKey;
       if (brandAttr) {
-        errKey = (predBrand && predAttrVal) ? (predBrand + ' · ' + predAttrVal) : (r.pred || 'Unknown');
+        errKey = (predBrand && predAttrVal) ? (predBrand + ' · ' + predAttrVal) : (predDN || r.pred || 'Unknown');
       } else {
-        errKey = predAttrVal || r.pred || 'Unknown';
+        errKey = predAttrVal || predDN || r.pred || 'Unknown';
       }
       if (!map[key].errors[errKey]) map[key].errors[errKey] = { count: 0, imgs: {} };
       map[key].errors[errKey].count++;
@@ -2019,7 +2225,7 @@ function exportVariantAccuracy() {
   var f = APP._variantAccuracyFilter;
   var rows = filteredRows();
   if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
-  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
+  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp && r.gt_comp !== 'self'; });
 
   var groupBy = APP._variantGroupBy || 'brand+attr';
   var data = buildAttrAccuracy(rows, attrKey, groupBy);
@@ -2117,7 +2323,7 @@ function renderVariantBreakdownCharts() {
 
   var baseRows = APP.d.rows;
   if (f === 'self') baseRows = baseRows.filter(function(r) { return r.gt_comp === 'self'; });
-  else if (f === 'competitor') baseRows = baseRows.filter(function(r) { return r.gt_comp !== 'self'; });
+  else if (f === 'competitor') baseRows = baseRows.filter(function(r) { return r.gt_comp && r.gt_comp !== 'self'; });
 
   var defs = buildFilterSectionDefs();
   var activeDefs = defs.filter(function(def) {
@@ -2226,7 +2432,7 @@ function buildBrandAccuracy(rows) {
     const brand = r.gt_brand;
     if (!brand || _isBlankVal(brand)) continue;
     if (!map[brand]) {
-      const comp = (APP.d.mMap[r.gt.toLowerCase()] && APP.d.mMap[r.gt.toLowerCase()].competition) || r.gt_comp || '';
+      const comp = ((APP.d.mMap[r.gt.toLowerCase()] && APP.d.mMap[r.gt.toLowerCase()].competition) || r.gt_comp || '').toLowerCase();
       map[brand] = { brand, correct:0, total:0, competition:comp, errors:{} };
     }
     map[brand].total++;
@@ -2370,7 +2576,7 @@ function renderBrandAccuracy() {
 
   var allData = buildBrandAccuracy(filteredRows());
   if (f === 'self')       allData = allData.filter(function(r) { return r.competition === 'self'; });
-  else if (f === 'competitor') allData = allData.filter(function(r) { return r.competition !== 'self'; });
+  else if (f === 'competitor') allData = allData.filter(function(r) { return r.competition && r.competition !== 'self'; });
 
   const data = applySort(allData, 'brand');
   APP._pivotBrand = data;
@@ -2498,7 +2704,7 @@ function renderVariantAccuracy() {
   // Apply self/competitor filter on top of sidebar filteredRows()
   var rows = filteredRows();
   if (f === 'self') rows = rows.filter(function(r) { return r.gt_comp === 'self'; });
-  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp !== 'self'; });
+  else if (f === 'competitor') rows = rows.filter(function(r) { return r.gt_comp && r.gt_comp !== 'self'; });
 
   const data = applySort(buildAttrAccuracy(rows, attrKey, groupBy), 'variant');
   APP._pivotVariant = data;
@@ -2557,12 +2763,15 @@ function buildSkuAccuracy(rows) {
   for (const r of rows) {
     const sku = r.gt;
     if (!sku || _isBlankVal(sku)) continue;
-    if (!map[sku]) map[sku] = { sku, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
+    const gtEntry  = APP.d.mMap[sku.toLowerCase()];
+    const dispName = (gtEntry && gtEntry.display_name) ? gtEntry.display_name : sku;
+    if (!map[sku]) map[sku] = { sku, displayName: dispName, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
     map[sku].total++;
     if (r.is_correct) {
       map[sku].correct++;
     } else {
-      const predSku = r.pred || 'Unknown';
+      const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
+      const predSku = (predEntry && predEntry.display_name) ? predEntry.display_name : (r.pred || 'Unknown');
       if (!map[sku].errors[predSku]) map[sku].errors[predSku] = { count:0, imgs:{} };
       map[sku].errors[predSku].count++;
       if (!map[sku].errors[predSku].imgs[r.sid]) map[sku].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
@@ -2578,8 +2787,12 @@ function renderSkuCoverageCard() {
   if (!el) return;
 
   // Masterdata universe (fixed — not affected by sidebar filters)
+  // Deduplicate: mMap has entries indexed by both class_name AND display_name
   var mdAll = 0, mdSelf = 0, mdComp = 0;
+  var _mdSeen = new Set();
   Object.values(APP.d.mMap).forEach(function(entry) {
+    if (_mdSeen.has(entry.class_name)) return;
+    _mdSeen.add(entry.class_name);
     mdAll++;
     if (entry.competition === 'self') mdSelf++;
     else mdComp++;
@@ -2663,7 +2876,7 @@ function renderSkuAccuracy() {
   const q = (APP._skuQ || '').toLowerCase();
   let data = buildSkuAccuracy(filteredRows());
   if (f === 'self')            data = data.filter(function(s) { return s.competition === 'self'; });
-  else if (f === 'competitor') data = data.filter(function(s) { return s.competition !== 'self'; });
+  else if (f === 'competitor') data = data.filter(function(s) { return s.competition && s.competition !== 'self'; });
 
   // Compute bucket counts on self/comp-filtered data (before bucket filter + search)
   var total  = data.length;
@@ -2703,13 +2916,13 @@ function renderSkuAccuracy() {
   else if (bf === '60to80') data = data.filter(function(s) { return s.accuracy > 0.60 && s.accuracy <= 0.80; });
   else if (bf === 'lt60')   data = data.filter(function(s) { return s.accuracy <= 0.60; });
 
-  if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.brand || '').toLowerCase().includes(q); });
+  if (q) data = data.filter(function(s) { return s.sku.toLowerCase().includes(q) || (s.displayName||'').toLowerCase().includes(q) || (s.brand || '').toLowerCase().includes(q); });
   data = applySort(data, 'sku');
   APP._pivotSku = data;
 
   document.getElementById('skuHead').innerHTML = '<tr>' +
     '<th style="width:28px;"></th>' +
-    sTh('SKU (QC Display Name)','sku','sku','left','min-width:200px;') +
+    sTh('Display Name','sku','displayName','left','min-width:200px;') +
     sTh('Brand','sku','brand','left','min-width:110px;') +
     sTh('Correct','sku','correct','','min-width:68px;') +
     sTh('Errors','sku','errorCount','','min-width:68px;') +
@@ -2733,7 +2946,7 @@ function renderSkuAccuracy() {
 
     const mainRow = '<tr' + (hasErrors ? ' onclick="toggleSkuDrillIdx(' + i + ')" style="cursor:pointer;"' : '') + '>' +
       '<td style="padding:7px 6px 7px 10px;">' + expandBtn + '</td>' +
-      '<td class="left" style="font-weight:500;color:var(--text);">' + s.sku + '</td>' +
+      '<td class="left" style="font-weight:500;color:var(--text);">' + (s.displayName || s.sku) + '</td>' +
       '<td class="left" style="color:var(--muted);font-size:.78rem;">' + (s.brand || '—') + '</td>' +
       '<td style="color:var(--green);">' + s.correct.toLocaleString() + '</td>' +
       '<td style="color:' + errCol + ';font-weight:' + (hasErrors?'600':'400') + ';">' + s.errorCount.toLocaleString() + '</td>' +
@@ -2803,7 +3016,7 @@ function buildBrandDemoRows(rows, brands) {
       img.nonNARTD++;
     } else if (r.pred === 'Others') {
       img.others++;
-    } else if (r.pred_brand && r.gt_brand !== r.pred_brand && r.comp === 'self') {
+    } else if (r.pred_brand && r.gt_brand !== r.pred_brand && gtComp === 'self') {
       // Prediction is a different CCI brand — brand-level self misclassification
       img.selfMisclass++;
     } else if (r.pred_brand && r.pred_brand in img.bc) {
@@ -3015,7 +3228,7 @@ function exportBrandAccuracy() {
   var data = buildBrandAccuracy(filteredRows());
   var f = APP._brandAccuracyFilter;
   if (f === 'self')       data = data.filter(function(r) { return r.competition === 'self'; });
-  else if (f === 'competitor') data = data.filter(function(r) { return r.competition !== 'self'; });
+  else if (f === 'competitor') data = data.filter(function(r) { return r.competition && r.competition !== 'self'; });
 
   var esc = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"'; };
   var headers = ['GT Brand','Type','Total','Correct','Errors','Accuracy %','Predicted As','Error Count','% of GT Errors','Image Session IDs','Image URLs'];
@@ -3095,6 +3308,7 @@ function renderAll() {
   const rows = filteredRows();
   renderHeadlineStats(rows);
   renderKPIs(computeMetrics(rows));
+  renderDataQualitySection();
   renderFilters();
   renderModelSelector();
   renderActiveTabContent(rows);
@@ -3205,7 +3419,7 @@ function renderComparisonSection() {
 
   // Compute per (model, date) accuracy
   var rows = APP.d.rows;
-  if (compFilter !== 'all') rows = rows.filter(function(r) { return (r.comp||'').toLowerCase() === compFilter; });
+  if (compFilter !== 'all') rows = rows.filter(function(r) { return (r.gt_comp||'').toLowerCase() === compFilter; });
 
   var dateSet = new Set();
   rows.forEach(function(r) { if (r._fileDate) dateSet.add(r._fileDate); });

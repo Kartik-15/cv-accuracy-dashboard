@@ -1397,7 +1397,7 @@ function exportSkuAccuracy() {
       var errSku = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? 'https://view.shelfwatch.io?url=' + i.fp : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? 'https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp) : ''; }).filter(Boolean).join('; ');
       csvRows.push([s.displayName || s.sku, s.brand || '', type, s.total, s.correct, s.errorCount, (s.accuracy*100).toFixed(1), errSku, errData.count, s.errorCount ? (errData.count/s.errorCount*100).toFixed(1) : '0', sids, urls]);
     });
   });
@@ -2150,6 +2150,8 @@ function buildAttrAccuracy(rows, attrKey, groupBy) {
       map[key].errors[errKey].count++;
       if (!map[key].errors[errKey].imgs[r.sid]) {
         map[key].errors[errKey].imgs[r.sid] = { sid: r.sid, fp: r.fp, quality: r.quality };
+      } else if (!map[key].errors[errKey].imgs[r.sid].fp && r.fp) {
+        map[key].errors[errKey].imgs[r.sid].fp = r.fp;
       }
     }
   }
@@ -2243,7 +2245,7 @@ function exportVariantAccuracy() {
       var errVariant = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + i.fp) : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp)) : ''; }).filter(Boolean).join('; ');
       csvRows.push([row.label, row.total, row.correct, row.errorCount, (row.accuracy * 100).toFixed(1), errVariant, errData.count, row.errorCount ? (errData.count / row.errorCount * 100).toFixed(1) : '0', sids, urls]);
     });
   });
@@ -2443,6 +2445,7 @@ function buildBrandAccuracy(rows) {
       if (!map[brand].errors[pb]) map[brand].errors[pb] = { count:0, imgs:{} };
       map[brand].errors[pb].count++;
       if (!map[brand].errors[pb].imgs[r.sid]) map[brand].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+      else if (!map[brand].errors[pb].imgs[r.sid].fp && r.fp) map[brand].errors[pb].imgs[r.sid].fp = r.fp;
     }
   }
   return Object.values(map)
@@ -2453,7 +2456,7 @@ function buildBrandAccuracy(rows) {
 function buildImgChips(imgs) {
   return imgs.map(function(img) {
     const qc  = qColor(img.quality);
-    const url = img.fp ? ('https://view.shelfwatch.io?url=' + img.fp) : '';
+    const url = img.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(img.fp)) : '';
     const sid8 = img.sid.substring(0,12) + '…';
     if (url) {
       return '<a href="' + url + '" target="_blank" class="img-chip" title="' + img.sid + '">' +
@@ -2653,6 +2656,7 @@ function buildVariantAccuracy(rows) {
       if (!map[key].errors[pb]) map[key].errors[pb] = { count:0, imgs:{} };
       map[key].errors[pb].count++;
       if (!map[key].errors[pb].imgs[r.sid]) map[key].errors[pb].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+      else if (!map[key].errors[pb].imgs[r.sid].fp && r.fp) map[key].errors[pb].imgs[r.sid].fp = r.fp;
     }
   }
   return Object.values(map)
@@ -2775,6 +2779,7 @@ function buildSkuAccuracy(rows) {
       if (!map[sku].errors[predSku]) map[sku].errors[predSku] = { count:0, imgs:{} };
       map[sku].errors[predSku].count++;
       if (!map[sku].errors[predSku].imgs[r.sid]) map[sku].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+      else if (!map[sku].errors[predSku].imgs[r.sid].fp && r.fp) map[sku].errors[predSku].imgs[r.sid].fp = r.fp;
     }
   }
   return Object.values(map)
@@ -3005,6 +3010,8 @@ function buildBrandDemoRows(rows, brands) {
         bc: {}, total: 0
       };
       brands.forEach(function(b) { imgMap[r.sid].bc[b] = 0; });
+    } else if (!imgMap[r.sid].fp && r.fp) {
+      imgMap[r.sid].fp = r.fp;
     }
 
     const img = imgMap[r.sid];
@@ -3073,7 +3080,7 @@ function renderBrandDemo() {
     document.getElementById('bdBody').innerHTML = '<tr><td colspan="' + (6+brands.length) + '" class="left"><div class="empty"><i class="fas fa-inbox"></i>No data matches current filters</div></td></tr>';
   } else {
     document.getElementById('bdBody').innerHTML = sl.map(function(row) {
-      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + row.fp) : '';
+      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(row.fp)) : '';
       const sid8      = row.sid.substring(0,8) + '…';
       const qc        = qColor(row.quality);
       return '<tr>' +
@@ -3115,6 +3122,8 @@ function buildSizeDemoRows(rows) {
     brandSet.add(r.gt_brand);
     if (!imgMap[r.sid]) {
       imgMap[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality, total:0, bc:{} };
+    } else if (!imgMap[r.sid].fp && r.fp) {
+      imgMap[r.sid].fp = r.fp;
     }
     imgMap[r.sid].total++;
     imgMap[r.sid].bc[r.gt_brand] = (imgMap[r.sid].bc[r.gt_brand] || 0) + 1;
@@ -3149,7 +3158,7 @@ function renderSizeDemo() {
     document.getElementById('sdBody').innerHTML = '<tr><td colspan="' + (3+freshBrands.length) + '" class="left"><div class="empty"><i class="fas fa-check-circle" style="color:var(--green);"></i>No size errors in current view</div></td></tr>';
   } else {
     document.getElementById('sdBody').innerHTML = sl.map(function(row) {
-      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + row.fp) : '';
+      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(row.fp)) : '';
       const sid8      = row.sid.substring(0,8) + '…';
       const qc        = qColor(row.quality);
       return '<tr>' +
@@ -3243,7 +3252,7 @@ function exportBrandAccuracy() {
       var errBrand = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + i.fp) : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp)) : ''; }).filter(Boolean).join('; ');
       rows.push([row.brand, row.competition === 'self' ? 'Self' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), errBrand, errData.count, row.errorCount ? (errData.count/row.errorCount*100).toFixed(1) : '0', sids, urls]);
     });
   });

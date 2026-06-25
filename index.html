@@ -1367,6 +1367,15 @@ function renderDataQualitySection() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// VIEWER URL HELPER
+// ═══════════════════════════════════════════════════════════
+function toViewerUrl(fp) {
+  if (!fp) return '';
+  if (fp.startsWith('https://view.shelfwatch.io')) return fp;
+  return 'https://view.shelfwatch.io?url=' + fp;
+}
+
+// ═══════════════════════════════════════════════════════════
 // SKU EXPORT
 // ═══════════════════════════════════════════════════════════
 
@@ -1397,7 +1406,7 @@ function exportSkuAccuracy() {
       var errSku = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? 'https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp) : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return toViewerUrl(i.fp); }).filter(Boolean).join('; ');
       csvRows.push([s.displayName || s.sku, s.brand || '', type, s.total, s.correct, s.errorCount, (s.accuracy*100).toFixed(1), errSku, errData.count, s.errorCount ? (errData.count/s.errorCount*100).toFixed(1) : '0', sids, urls]);
     });
   });
@@ -2245,7 +2254,7 @@ function exportVariantAccuracy() {
       var errVariant = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp)) : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return toViewerUrl(i.fp); }).filter(Boolean).join('; ');
       csvRows.push([row.label, row.total, row.correct, row.errorCount, (row.accuracy * 100).toFixed(1), errVariant, errData.count, row.errorCount ? (errData.count / row.errorCount * 100).toFixed(1) : '0', sids, urls]);
     });
   });
@@ -2456,7 +2465,7 @@ function buildBrandAccuracy(rows) {
 function buildImgChips(imgs) {
   return imgs.map(function(img) {
     const qc  = qColor(img.quality);
-    const url = img.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(img.fp)) : '';
+    const url = toViewerUrl(img.fp);
     const sid8 = img.sid.substring(0,12) + '…';
     if (url) {
       return '<a href="' + url + '" target="_blank" class="img-chip" title="' + img.sid + '">' +
@@ -3080,7 +3089,7 @@ function renderBrandDemo() {
     document.getElementById('bdBody').innerHTML = '<tr><td colspan="' + (6+brands.length) + '" class="left"><div class="empty"><i class="fas fa-inbox"></i>No data matches current filters</div></td></tr>';
   } else {
     document.getElementById('bdBody').innerHTML = sl.map(function(row) {
-      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(row.fp)) : '';
+      const viewerUrl = toViewerUrl(row.fp);
       const sid8      = row.sid.substring(0,8) + '…';
       const qc        = qColor(row.quality);
       return '<tr>' +
@@ -3158,7 +3167,7 @@ function renderSizeDemo() {
     document.getElementById('sdBody').innerHTML = '<tr><td colspan="' + (3+freshBrands.length) + '" class="left"><div class="empty"><i class="fas fa-check-circle" style="color:var(--green);"></i>No size errors in current view</div></td></tr>';
   } else {
     document.getElementById('sdBody').innerHTML = sl.map(function(row) {
-      const viewerUrl = row.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(row.fp)) : '';
+      const viewerUrl = toViewerUrl(row.fp);
       const sid8      = row.sid.substring(0,8) + '…';
       const qc        = qColor(row.quality);
       return '<tr>' +
@@ -3252,7 +3261,7 @@ function exportBrandAccuracy() {
       var errBrand = e[0], errData = e[1];
       var imgs = Object.values(errData.imgs);
       var sids = imgs.map(function(i) { return i.sid; }).join('; ');
-      var urls = imgs.map(function(i) { return i.fp ? ('https://view.shelfwatch.io?url=' + encodeURIComponent(i.fp)) : ''; }).filter(Boolean).join('; ');
+      var urls = imgs.map(function(i) { return toViewerUrl(i.fp); }).filter(Boolean).join('; ');
       rows.push([row.brand, row.competition === 'self' ? 'Self' : 'Competitor', row.total, row.correct, row.errorCount, (row.accuracy*100).toFixed(1), errBrand, errData.count, row.errorCount ? (errData.count/row.errorCount*100).toFixed(1) : '0', sids, urls]);
     });
   });

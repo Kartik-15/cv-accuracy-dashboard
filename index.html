@@ -2776,9 +2776,9 @@ function buildSkuAccuracy(rows) {
   for (const r of rows) {
     const sku = r.gt;
     if (!sku || _isBlankVal(sku)) continue;
-    const key = sku.toLowerCase();
-    const gtEntry  = APP.d.mMap[key];
+    const gtEntry  = APP.d.mMap[sku.toLowerCase()];
     const dispName = (gtEntry && gtEntry.display_name) ? gtEntry.display_name : sku;
+    const key = dispName.toLowerCase();
     if (!map[key]) map[key] = { sku: dispName, displayName: dispName, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
     map[key].total++;
     if (r.is_correct) {

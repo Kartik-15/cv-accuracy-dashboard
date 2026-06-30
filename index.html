@@ -2490,7 +2490,7 @@ function buildDrillContent(errors, total, colspan, label) {
   const tableRows = entries.map(function(entry) {
     const keyName = entry[0], data = entry[1];
     const cnt  = data.count;
-    const imgs = Object.values(data.imgs).slice(0, 6);
+    const imgs = Object.values(data.imgs);
     const chips = imgs.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + buildImgChips(imgs) + '</div>'
       : '<span style="font-size:.7rem;color:var(--muted);font-style:italic;">no image URL</span>';
@@ -2512,7 +2512,7 @@ function buildDrillContent(errors, total, colspan, label) {
     '<th style="text-align:left;padding:3px 14px 6px 0;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Predicted ' + label + '</th>' +
     '<th style="text-align:right;padding:3px 12px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Count</th>' +
     '<th style="text-align:right;padding:3px 14px 6px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">% of Errors</th>' +
-    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Affected Images (up to 6 per ' + label.toLowerCase() + ')</th>' +
+    '<th style="text-align:left;padding:3px 0 6px 4px;font-size:.67rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);">Affected Images</th>' +
     '</tr></thead>' +
     '<tbody>' + tableRows + '</tbody>' +
     '</table></div></div></td></tr>';
@@ -2776,19 +2776,20 @@ function buildSkuAccuracy(rows) {
   for (const r of rows) {
     const sku = r.gt;
     if (!sku || _isBlankVal(sku)) continue;
-    const gtEntry  = APP.d.mMap[sku.toLowerCase()];
+    const key = sku.toLowerCase();
+    const gtEntry  = APP.d.mMap[key];
     const dispName = (gtEntry && gtEntry.display_name) ? gtEntry.display_name : sku;
-    if (!map[sku]) map[sku] = { sku, displayName: dispName, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
-    map[sku].total++;
+    if (!map[key]) map[key] = { sku: dispName, displayName: dispName, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
+    map[key].total++;
     if (r.is_correct) {
-      map[sku].correct++;
+      map[key].correct++;
     } else {
       const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
       const predSku = (predEntry && predEntry.display_name) ? predEntry.display_name : (r.pred || 'Unknown');
-      if (!map[sku].errors[predSku]) map[sku].errors[predSku] = { count:0, imgs:{} };
-      map[sku].errors[predSku].count++;
-      if (!map[sku].errors[predSku].imgs[r.sid]) map[sku].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
-      else if (!map[sku].errors[predSku].imgs[r.sid].fp && r.fp) map[sku].errors[predSku].imgs[r.sid].fp = r.fp;
+      if (!map[key].errors[predSku]) map[key].errors[predSku] = { count:0, imgs:{} };
+      map[key].errors[predSku].count++;
+      if (!map[key].errors[predSku].imgs[r.sid]) map[key].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };
+      else if (!map[key].errors[predSku].imgs[r.sid].fp && r.fp) map[key].errors[predSku].imgs[r.sid].fp = r.fp;
     }
   }
   return Object.values(map)

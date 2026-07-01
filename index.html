@@ -2781,11 +2781,11 @@ function buildSkuAccuracy(rows) {
     const key = dispName.toLowerCase();
     if (!map[key]) map[key] = { sku: dispName, displayName: dispName, brand:r.gt_brand, competition:r.gt_comp, correct:0, total:0, errors:{} };
     map[key].total++;
-    if (r.is_correct) {
+    const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
+    const predSku = (predEntry && predEntry.display_name) ? predEntry.display_name : (r.pred || 'Unknown');
+    if (r.is_correct || predSku.toLowerCase() === key) {
       map[key].correct++;
     } else {
-      const predEntry = APP.d.mMap[(r.pred || '').toLowerCase()];
-      const predSku = (predEntry && predEntry.display_name) ? predEntry.display_name : (r.pred || 'Unknown');
       if (!map[key].errors[predSku]) map[key].errors[predSku] = { count:0, imgs:{} };
       map[key].errors[predSku].count++;
       if (!map[key].errors[predSku].imgs[r.sid]) map[key].errors[predSku].imgs[r.sid] = { sid:r.sid, fp:r.fp, quality:r.quality };

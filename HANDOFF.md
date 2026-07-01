@@ -30,7 +30,7 @@ Deployment: GitHub Pages, served from `main` branch root. `.nojekyll` file preve
 | `RA Accuracy.xlsx` | **UTILITY** | Earlier accuracy sheet; same schema |
 
 ### Current Objective
-SKU Analysis tab is now fully overhauled (session 7): SKU-level drill-down, Self/Competitor filter, accuracy bucket stat chips, and a SKU Coverage card. Next: export CSV for SKU accuracy table, MSL feature, and Trends tab polish.
+SKU Analysis tab bugs fixed (session 8): duplicate rows resolved, all error images now shown, self-error phantom entries eliminated. Next: export CSV for SKU accuracy table, MSL feature, and Trends tab polish.
 
 ### Immediate Next Steps
 1. Verify multi-model upload flow end-to-end with real files (2+ models, same masterdata).
@@ -695,6 +695,18 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 - **Problem:** Condition was `gt_brand === pred_brand` (same brand, any different SKU). These errors showed up in Self Misclass but not in any competitor column, making the numbers confusing ("mistakes are listed but not visible in other columns").
 - **Fix:** Changed to `r.comp === 'self' && r.gt_brand !== r.pred_brand` — only brand-level cross-self errors (e.g. COCA-COLA GT predicted as THUMS UP). Same-brand-different-SKU now falls to Others.
 
+**13. SKU accuracy table showing duplicate rows for same display name**
+- **Problem:** `buildSkuAccuracy` keyed its accumulator map by `r.gt.toLowerCase()` (raw GT string). `buildMasterdataMap` double-indexes every entry under both `class_name.toLowerCase()` AND `display_name.toLowerCase()`. Detection rows whose `r.gt` matched the `class_name` form produced a different key than rows whose `r.gt` matched the `display_name` form, creating two separate rows in the table for the same SKU.
+- **Fix:** Changed map key to `dispName.toLowerCase()` where `dispName = mMap[sku.toLowerCase()].display_name || sku`. Any `r.gt` that resolves to the same masterdata entry now merges into one row.
+
+**14. SKU drill-down image list capped at 6**
+- **Problem:** `buildDrillContent` called `.slice(0, 6)` on the images array, hiding most affected images per predicted SKU.
+- **Fix:** Removed `.slice(0, 6)`; all affected images now shown. Updated column header from "Affected Images (up to 6 per sku)" to "Affected Images".
+
+**15. SKU drill-down showing the same SKU as a misclassification target**
+- **Problem:** `is_correct` uses raw string equality (`r.gt === r.pred`), but the error accumulator key uses `predEntry.display_name` (canonical form from masterdata). When `r.pred` appeared in the detection file in a different casing or as the `class_name` form, `is_correct = false` even though both GT and prediction resolve to the same canonical SKU — causing the drill-down to list "predicted as THUMS UP PET 250ML" for GT "THUMS UP PET 250ML".
+- **Fix:** In `buildSkuAccuracy`, after resolving `predSku`, added `|| predSku.toLowerCase() === key` to the correctness check. Rows where the canonical predicted display name equals the canonical GT key are now counted as correct and excluded from errors. Brand and Variant tabs unaffected — they already use canonical names (`r.pred_brand`, `predEntry.attrs[attrKey]`) for both sides of their correctness checks.
+
 ---
 
 ## Section 8: Open Tasks
@@ -818,6 +830,10 @@ Each time "Process Data" completes, a snapshot is saved to localStorage. In the 
 | June 2026 | SKU Accuracy table: accuracy bucket stat chips (Total / >90% / 80–90% / 60–80% / <60%) above the table; each chip shows count and doubles as a filter button (`_skuBucketFilter` + `setSkuBucketFilter`); bucket counts always reflect Self/Comp scope before bucket filter is applied |
 | June 2026 | SKU Coverage card (`#skuCoverageCard`, rendered by `renderSkuCoverageCard()`): masterdata SKU universe vs. GT SKUs seen in accuracy data, split All / Self / Competitor; animated progress bars color-coded by coverage tier; warning banner when masterdata SKUs have no GT observations; uses `APP.d.rows` (unfiltered) so sidebar filters don't deflate coverage numbers |
 | June 2026 | HANDOFF.md updated for session 7 |
+| July 2026 | **Session 8:** Fixed duplicate rows in SKU accuracy table — `buildSkuAccuracy` now keys accumulator by `dispName.toLowerCase()` (canonical display_name from masterdata) instead of `r.gt.toLowerCase()`; resolves the double-indexing in `mMap` (class_name + display_name both present as keys) |
+| July 2026 | Removed 6-image cap in `buildDrillContent` — `.slice(0, 6)` dropped; all affected images per predicted SKU now shown; column header updated |
+| July 2026 | Fixed SKU drill-down self-error: added `predSku.toLowerCase() === key` canonical match check alongside `r.is_correct`; rows where GT and pred differ only in string form but resolve to same masterdata display_name are now counted as correct, not errors |
+| July 2026 | HANDOFF.md updated for session 8 |
 
 ---
 
